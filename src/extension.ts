@@ -107,10 +107,16 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
   // Rendo disponibili i template anche nella sidebar come sezione "Template di regole"
   getChildren(element?: RuleItem): Thenable<RuleItem[]> {
     if (!element) {
+      // Recupera i conteggi di regole attive per mostrare nei badge
+      const selectedDefaultRules = this.context.globalState.get<string[]>('selectedDefaultRules', []);
+      const personalRules = this.context.globalState.get<string>('personalRules', '').split(/\r?\n/).filter(r => r.trim().length > 0);
+      const memoryRulesEnabled = this.getMemoryRulesEnabled();
+      const selectedMemoryRules = memoryRulesEnabled ? this.context.globalState.get<string[]>('selectedMemoryRules', []) : [];
+      
       return Promise.resolve([
-        new RuleItem('Regole di default', vscode.TreeItemCollapsibleState.Expanded, 'default'),
-        new RuleItem('Regole personali', vscode.TreeItemCollapsibleState.Expanded, 'personal'),
-        new RuleItem('Regole della memoria', vscode.TreeItemCollapsibleState.Expanded, 'memory'),
+        new RuleItem('Regole di default', vscode.TreeItemCollapsibleState.Expanded, 'default', false, false, false, false, false, undefined, selectedDefaultRules.length),
+        new RuleItem('Regole personali', vscode.TreeItemCollapsibleState.Expanded, 'personal', false, false, false, false, false, undefined, personalRules.length),
+        new RuleItem('Regole della memoria', vscode.TreeItemCollapsibleState.Expanded, 'memory', false, false, false, false, false, undefined, memoryRulesEnabled ? selectedMemoryRules.length : 0),
         new RuleItem('Template di regole', vscode.TreeItemCollapsibleState.Expanded, 'template')
       ]);
     }
@@ -178,10 +184,38 @@ class RuleItem extends vscode.TreeItem {
     isEnableMemoryOption: boolean = false,
     isCreateMemoryFilesOption: boolean = false,
     isDisableMemoryOption: boolean = false,
-    templateLang?: string
+    templateLang?: string,
+    activeCount?: number
   ) {
-    super(label, collapsibleState);
+    // Se è stata passata una quantità di regole attive, mostrala nel nome
+    if (activeCount !== undefined) {
+      const badgeLabel = typeof label === 'string' ? label : String(label);
+      super(`${badgeLabel} (${activeCount})`, collapsibleState);
+    } else {
+      super(label, collapsibleState);
+    }
+    
     this.type = type;
+
+    // Imposta icone distintive per ogni tipo di nodo
+    switch (type) {
+      case 'default':
+        this.iconPath = new vscode.ThemeIcon('book');
+        break;
+      case 'personal':
+        this.iconPath = new vscode.ThemeIcon('person');
+        break;
+      case 'memory':
+        this.iconPath = new vscode.ThemeIcon('database');
+        break;
+      case 'template':
+        this.iconPath = new vscode.ThemeIcon('library');
+        break;
+      case 'templateGroup':
+        this.iconPath = new vscode.ThemeIcon('symbol-class');
+        break;
+    }
+
     if (type === 'defaultRule') {
       this.contextValue = checked ? 'checkedDefaultRule' : 'uncheckedDefaultRule';
       this.iconPath = new vscode.ThemeIcon(checked ? 'check' : 'circle-outline');
@@ -483,49 +517,276 @@ export function activate(context: vscode.ExtensionContext) {
     const defaultRules = rulesProvider.defaultRules;
     const memoryRules = rulesProvider.memoryRules;
     const personalRules = (context.globalState.get<string>('personalRules', '') || '').split(/\r?\n/).filter(r => r.trim().length > 0);
-    // HTML base per la webview
+    const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
+    const selectedMemoryRules = context.globalState.get<string[]>('selectedMemoryRules', []);
+    
+    // HTML migliorato per la webview con CSS e funzionalità drag and drop
     panel.webview.html = `
-      <html><body>
-        <h2>Regole di default</h2>
-        <ul>
-          ${defaultRules.map(r => `<li>${r}</li>`).join('')}
-        </ul>
-        <h2>Regole della memoria</h2>
-        <ul>
-          ${memoryRules.map(r => `<li>${r}</li>`).join('')}
-        </ul>
-        <h2>Regole personali</h2>
-        <ul id="personalRules">
-          ${personalRules.map((r, i) => `<li><input type="text" value="${r}" data-idx="${i}" /> <button data-del="${i}">Elimina</button></li>`).join('')}
-        </ul>
-        <button id="addRule">Aggiungi regola personale</button>
-        <button id="save">Salva</button>
+      <html>
+      <head>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            padding: 20px;
+            color: var(--vscode-foreground);
+            background-color: var(--vscode-editor-background);
+          }
+          h1 {
+            color: var(--vscode-editor-foreground);
+            border-bottom: 1px solid var(--vscode-panel-border);
+            padding-bottom: 10px;
+          }
+          h2 {
+            margin-top: 25px;
+            color: var(--vscode-panelTitle-activeForeground);
+            font-size: 1.2em;
+          }
+          .section {
+            margin-bottom: 30px;
+            background-color: var(--vscode-editor-background);
+            border-radius: 6px;
+            padding: 15px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+          }
+          .rule-container {
+            list-style-type: none;
+            padding: 0;
+          }
+          .rule-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 10px;
+            margin-bottom: 8px;
+            background-color: var(--vscode-list-activeSelectionBackground);
+            border-radius: 4px;
+            transition: all 0.2s;
+            cursor: move;
+          }
+          .rule-item:hover {
+            background-color: var(--vscode-list-hoverBackground);
+          }
+          .rule-item.dragging {
+            opacity: 0.5;
+          }
+          .rule-checkbox {
+            margin-right: 10px;
+          }
+          .rule-item input[type="text"] {
+            flex-grow: 1;
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
+            padding: 6px 8px;
+            border-radius: 3px;
+            font-size: 14px;
+          }
+          .rule-item button {
+            background-color: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
+            border: none;
+            padding: 6px 10px;
+            margin-left: 10px;
+            border-radius: 3px;
+            cursor: pointer;
+          }
+          .rule-item button:hover {
+            background-color: var(--vscode-button-secondaryHoverBackground);
+          }
+          .rule-item .drag-handle {
+            cursor: move;
+            padding: 5px;
+            margin-right: 8px;
+            color: var(--vscode-descriptionForeground);
+          }
+          .add-button, .save-button {
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            padding: 8px 12px;
+            margin-top: 10px;
+            margin-right: 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-weight: 500;
+          }
+          .add-button:hover, .save-button:hover {
+            background-color: var(--vscode-button-hoverBackground);
+          }
+          .rule-text {
+            flex-grow: 1;
+            padding: 6px 0;
+          }
+          /* Stile dei placeholder durante il drag and drop */
+          .rule-item.sortable-ghost {
+            opacity: 0.2;
+            background-color: var(--vscode-editor-selectionBackground);
+          }
+          .rule-item.sortable-chosen {
+            background-color: var(--vscode-list-focusBackground);
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Editor Visuale Regole Copilot</h1>
+        
+        <div class="section">
+          <h2>📚 Regole di default</h2>
+          <ul class="rule-container default-rules">
+            ${defaultRules.map(r => `
+              <li class="rule-item">
+                <input type="checkbox" class="rule-checkbox" data-rule="${r}" ${selectedDefaultRules.includes(r) ? 'checked' : ''}>
+                <span class="rule-text">${r}</span>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+        
+        <div class="section">
+          <h2>🗄️ Regole della memoria</h2>
+          <ul class="rule-container memory-rules">
+            ${memoryRules.map(r => `
+              <li class="rule-item">
+                <input type="checkbox" class="rule-checkbox" data-rule="${r}" ${selectedMemoryRules.includes(r) ? 'checked' : ''}>
+                <span class="rule-text">${r}</span>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+        
+        <div class="section">
+          <h2>👤 Regole personali</h2>
+          <ul id="personalRules" class="rule-container personal-rules">
+            ${personalRules.map((r, i) => `
+              <li class="rule-item" draggable="true">
+                <span class="drag-handle">⋮⋮</span>
+                <input type="text" value="${r}" data-idx="${i}" class="rule-input">
+                <button class="delete-button" data-del="${i}">Elimina</button>
+              </li>
+            `).join('')}
+          </ul>
+          <button id="addRule" class="add-button">+ Aggiungi regola personale</button>
+        </div>
+        
+        <button id="save" class="save-button">💾 Salva tutte le regole</button>
+        
         <script>
           const vscode = acquireVsCodeApi();
+          
+          // Drag and drop per le regole personali
+          const personalRulesList = document.getElementById('personalRules');
+          let draggedItem = null;
+          
+          // Implementazione base di drag and drop
+          document.querySelectorAll('.rule-item').forEach(item => {
+            item.addEventListener('dragstart', function() {
+              draggedItem = this;
+              setTimeout(() => this.classList.add('dragging'), 0);
+            });
+            
+            item.addEventListener('dragend', function() {
+              this.classList.remove('dragging');
+              draggedItem = null;
+            });
+            
+            item.addEventListener('dragover', function(e) {
+              e.preventDefault();
+              if (draggedItem !== this && draggedItem.parentElement === this.parentElement) {
+                const rect = this.getBoundingClientRect();
+                const y = e.clientY - rect.top;
+                if (y < rect.height / 2) {
+                  this.parentElement.insertBefore(draggedItem, this);
+                } else {
+                  this.parentElement.insertBefore(draggedItem, this.nextSibling);
+                }
+              }
+            });
+          });
+          
+          // Aggiunta nuova regola personale
           document.getElementById('addRule').onclick = () => {
             const ul = document.getElementById('personalRules');
             const li = document.createElement('li');
-            li.innerHTML = '<input type="text" value="" data-idx="new" /> <button data-del="new">Elimina</button>';
+            li.className = 'rule-item';
+            li.draggable = true;
+            li.innerHTML = '<span class="drag-handle">⋮⋮</span><input type="text" value="" data-idx="new" class="rule-input"> <button class="delete-button" data-del="new">Elimina</button>';
+            
+            // Aggiungi listener drag and drop anche al nuovo elemento
+            li.addEventListener('dragstart', function() {
+              draggedItem = this;
+              setTimeout(() => this.classList.add('dragging'), 0);
+            });
+            
+            li.addEventListener('dragend', function() {
+              this.classList.remove('dragging');
+              draggedItem = null;
+            });
+            
+            li.addEventListener('dragover', function(e) {
+              e.preventDefault();
+              if (draggedItem !== this && draggedItem.parentElement === this.parentElement) {
+                const rect = this.getBoundingClientRect();
+                const y = e.clientY - rect.top;
+                if (y < rect.height / 2) {
+                  this.parentElement.insertBefore(draggedItem, this);
+                } else {
+                  this.parentElement.insertBefore(draggedItem, this.nextSibling);
+                }
+              }
+            });
+            
             ul.appendChild(li);
           };
+          
+          // Salva tutte le regole
           document.getElementById('save').onclick = () => {
-            const inputs = Array.from(document.querySelectorAll('#personalRules input'));
-            const rules = inputs.map(i => i.value).filter(v => v.trim().length > 0);
-            vscode.postMessage({ type: 'save', rules });
+            // Regole personali
+            const inputs = Array.from(document.querySelectorAll('#personalRules input.rule-input'));
+            const personalRules = inputs.map(i => i.value).filter(v => v.trim().length > 0);
+            
+            // Regole di default selezionate
+            const defaultRules = Array.from(document.querySelectorAll('.default-rules input:checked'))
+              .map(checkbox => checkbox.getAttribute('data-rule'));
+            
+            // Regole della memoria selezionate
+            const memoryRules = Array.from(document.querySelectorAll('.memory-rules input:checked'))
+              .map(checkbox => checkbox.getAttribute('data-rule'));
+            
+            vscode.postMessage({ 
+              type: 'save', 
+              personalRules,
+              defaultRules,
+              memoryRules
+            });
           };
-          document.getElementById('personalRules').onclick = (e) => {
-            if (e.target.tagName === 'BUTTON') {
-              e.target.parentElement.remove();
+          
+          // Eliminazione regole
+          document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('delete-button')) {
+              e.target.closest('.rule-item').remove();
             }
-          };
+          });
         </script>
-      </body></html>
+      </body>
+      </html>
     `;
-    panel.webview.onDidReceiveMessage(msg => {
+    
+    // Gestione messaggi dalla webview
+    panel.webview.onDidReceiveMessage(async msg => {
       if (msg.type === 'save') {
-        context.globalState.update('personalRules', msg.rules.join('\n'));
+        // Salva regole personali
+        await context.globalState.update('personalRules', msg.personalRules.join('\n'));
+        
+        // Salva regole default selezionate
+        await context.globalState.update('selectedDefaultRules', msg.defaultRules);
+        
+        // Salva regole memoria selezionate
+        await context.globalState.update('selectedMemoryRules', msg.memoryRules);
+        
+        // Aggiorna le regole nel file GitHub
+        await saveAllRulesToCopilotInstructions();
+        
         rulesProvider.refresh();
-        vscode.window.showInformationMessage('Regole personali aggiornate!');
+        vscode.window.showInformationMessage('Tutte le regole sono state aggiornate!');
       }
     });
   }));

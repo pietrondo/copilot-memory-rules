@@ -1,71 +1,94 @@
-# copilot-rules-injector README
+# Copilot Rules Injector
 
-This is the README for your extension "copilot-rules-injector". After writing up a brief description, we recommend including the following sections.
+Un'estensione VS Code che consente di gestire e iniettare regole personalizzate per GitHub Copilot.
 
-## Features
+![Copilot Rules Injector](icon.svg)
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+## Funzionalità
 
-For example if there is an image subfolder under your extension project workspace:
+- **Gestione regole per GitHub Copilot**: seleziona, personalizza e inietta regole direttamente nel tuo progetto
+- **Template per linguaggi/framework**: aggiungi facilmente regole predefinite per JavaScript, Python, TypeScript, React, Node.js, Django e Flask
+- **Editor visuale regole**: interfaccia drag and drop per riordinare, aggiungere e modificare le regole
+- **Esportazione/importazione**: condividi le tue regole con il team o importale in nuovi progetti
+- **Rilevamento automatico**: suggerimenti contestuali basati sul codice del tuo progetto
+- **Integrazione GitHub**: crea automaticamente un file `.github/copilot-instructions.md` con le regole selezionate
 
-\!\[feature X\]\(images/feature-x.png\)
+## Installazione
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+1. Apri VS Code
+2. Vai all'estensioni (Ctrl+Shift+X)
+3. Cerca "Copilot Rules Injector"
+4. Clicca su Install
 
-## Requirements
+## Utilizzo
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+### Sidebar
 
-## Extension Settings
+L'estensione aggiunge una sidebar nell'activity bar di VS Code con le seguenti sezioni:
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+- **Regole di default**: regole generali consigliate per qualsiasi progetto
+- **Regole personali**: regole personalizzate che puoi aggiungere e modificare
+- **Regole della memoria**: regole per mantenere il contesto del progetto
+- **Template di regole**: regole predefinite per linguaggi/framework specifici
 
-For example:
+Ogni categoria mostra anche un badge con il numero di regole attualmente selezionate.
 
-This extension contributes the following settings:
+### Editor visuale
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+Per aprire l'editor visuale delle regole:
+1. Clicca sul pulsante "Apri editor visuale regole" nella sezione Template della sidebar
+2. Oppure usa il comando `Copilot Rules Injector: Apri editor visuale regole` dalla palette comandi (Ctrl+Shift+P)
 
-## Known Issues
+Nell'editor puoi:
+- Selezionare/deselezionare regole di default e della memoria
+- Aggiungere, modificare, eliminare regole personali
+- Riordinare le regole con drag and drop
+- Salvare tutte le modifiche con un solo click
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+### Template per linguaggi/framework
 
-## Release Notes
+Puoi aggiungere regole specifiche per:
+- JavaScript
+- Python
+- TypeScript
+- React
+- Node.js
+- Django
+- Flask
 
-Users appreciate release notes as you update your extension.
+Basta cliccare sul linguaggio/framework nella sezione Template e selezionare le regole che vuoi aggiungere.
 
-### 1.0.0
+### Esportazione/Importazione
 
-Initial release of ...
+Per condividere le tue regole:
+1. Usa il comando `Copilot Rules Injector: Esporta regole selezionate` dalla palette comandi
+2. Salva il file JSON delle regole
+3. Condividilo con il tuo team
 
-### 1.0.1
+Per importare regole:
+1. Usa il comando `Copilot Rules Injector: Importa regole` dalla palette comandi
+2. Seleziona il file JSON delle regole
 
-Fixed issue #.
+## Comandi disponibili
 
-### 1.1.0
+- `Copilot Rules Injector: Apri editor visuale regole`: Apre l'editor visuale delle regole
+- `Copilot Rules Injector: Esporta regole selezionate`: Esporta le regole in formato JSON
+- `Copilot Rules Injector: Importa regole`: Importa regole da un file JSON
+- `Copilot Rules Injector: Suggerisci regole`: Analizza il codice e suggerisce regole contestuali
+- `Copilot Rules Injector: Inietta regole selezionate`: Crea/aggiorna il file `.github/copilot-instructions.md` con le regole selezionate
 
-Added features X, Y, and Z.
+## Screenshots
 
----
+*[Inserire qui screenshot dell'estensione con sidebar, editor visuale, ecc.]*
 
-## Following extension guidelines
+## Come funziona
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+L'estensione salva tutte le regole selezionate nel file `.github/copilot-instructions.md`, che è il percorso ufficiale riconosciuto da GitHub Copilot per le istruzioni personalizzate. Questo consente a Copilot di generare codice in linea con le tue preferenze e quelle del tuo team.
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+## Contribuire
 
-## Working with Markdown
+Contributi sono benvenuti! Sentiti libero di aprire issues o pull requests su GitHub.
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+## Licenza
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+[MIT](LICENSE)
