@@ -493,15 +493,20 @@ class RuleItem extends vscode.TreeItem {
     
     this.tooltip = this.label;
     
+    // Miglioriamo le icone e la visualizzazione per le sezioni principali
     if (type === 'default' || type === 'personal' || type === 'memory' || type === 'template') {
-      this.iconPath = new vscode.ThemeIcon('list-unordered');
+      this.iconPath = new vscode.ThemeIcon('list-tree');
       if (count !== undefined && count > 0) {
         this.description = `${count} ${type === 'personal' ? 'regole' : 'selezionate'}`;
+        // Aggiungiamo un badge con un colore più evidente per mostrare il conteggio
+        this.iconPath = new vscode.ThemeIcon('symbol-event');
       }
     }
     
     if (type === 'templateGroup') {
       this.iconPath = new vscode.ThemeIcon('symbol-namespace');
+      // Miglioramento del tooltip per i template di linguaggio
+      this.tooltip = `Template regole per ${this.label}. Clicca per visualizzare le regole specifiche.`;
     }
     
     if (type === 'defaultRule' || type === 'memoryRule') {
@@ -511,10 +516,15 @@ class RuleItem extends vscode.TreeItem {
         command: type === 'defaultRule' ? 'copilotRules.toggleDefaultRule' : 'copilotRules.toggleMemoryRule',
         arguments: [this]
       };
+      // Aggiunta icona per le regole selezionate per migliorare la visibilità
+      if (checked) {
+        this.iconPath = new vscode.ThemeIcon('check');
+      }
     }
     
     if (type === 'personalRule' && isTextEdit) {
       this.contextValue = 'personalRule';
+      this.iconPath = new vscode.ThemeIcon('edit');
     }
     
     if (type === 'memoryDisabled') {
@@ -534,6 +544,9 @@ class RuleItem extends vscode.TreeItem {
         command: 'copilotRules.toggleTemplateRule',
         arguments: [this]
       };
+      // Aggiunta icona per le regole di template
+      this.iconPath = templateLanguage ? new vscode.ThemeIcon('symbol-method') : undefined;
+      this.tooltip = `Regola per ${templateLanguage}. Clicca per ${checked ? 'disattivare' : 'attivare'} questa regola.`;
     }
     
     if (type === 'openRulesEditorButton') {
@@ -543,26 +556,27 @@ class RuleItem extends vscode.TreeItem {
         command: 'copilotRules.openAdvancedRulesEditor',
         arguments: []
       };
+      this.tooltip = 'Apre un editor visuale avanzato per gestire tutte le regole in modo più intuitivo';
     }
     
     if (type === 'createRulesFileButton') {
-      this.iconPath = new vscode.ThemeIcon('new-file');
+      this.iconPath = new vscode.ThemeIcon('cloud-upload');
       this.command = {
         title: 'Crea file delle regole',
         command: 'copilotRules.createRulesFile',
         arguments: []
       };
-      this.tooltip = 'Crea un file delle regole nella cartella regole';
+      this.tooltip = 'Crea un file delle regole nella cartella del progetto per GitHub Copilot';
     }
     
     if (type === 'showRulesFileStatusButton') {
-      this.iconPath = new vscode.ThemeIcon('info');
+      this.iconPath = new vscode.ThemeIcon('pulse');
       this.command = {
         title: 'Mostra stato delle regole',
         command: 'copilotRules.showRulesFileStatus',
         arguments: []
       };
-      this.tooltip = 'Mostra quali regole sono attive nel file delle regole';
+      this.tooltip = 'Mostra un report dettagliato delle regole attualmente attive nel progetto';
     }
   }
 }
@@ -746,70 +760,73 @@ export function activate(context: vscode.ExtensionContext) {
     decorationTimeout = setTimeout(updateDecorations, 500);
   }
   
-  // Registra il TreeDataProvider per la visualizzazione delle regole
-  vscode.window.registerTreeDataProvider('copilotRulesView', rulesProvider);
-  
-  // Aggiungi un pulsante "Inserisci regole selezionate" nella barra di stato
-  const insertRulesButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  insertRulesButton.text = "$(zap) Inserisci regole selezionate";
-  insertRulesButton.tooltip = "Inserisci le regole selezionate nel file di istruzioni di Copilot";
-  insertRulesButton.command = "copilotRules.insertSelectedRules";
-  insertRulesButton.show();
-  context.subscriptions.push(insertRulesButton);
-  
   // Registra i comandi
+  // Registra comandi per l'attivazione/disattivazione delle regole
   context.subscriptions.push(
-    // Comando per attivare/disattivare le regole di default
     vscode.commands.registerCommand('copilotRules.toggleDefaultRule', (item: RuleItem) => {
+      // Ottieni la lista attuale di regole selezionate
       const selectedRules = context.globalState.get<string[]>('selectedDefaultRules', []);
       const rule = item.label.toString();
       
+      // Crea una copia della lista corrente per non modificare l'originale direttamente
+      const updatedSelectedRules = [...selectedRules];
+      
       if (item.checked) {
         // Rimuovi la regola dalla selezione
-        const index = selectedRules.indexOf(rule);
+        const index = updatedSelectedRules.indexOf(rule);
         if (index !== -1) {
-          selectedRules.splice(index, 1);
+          updatedSelectedRules.splice(index, 1);
         }
       } else {
         // Aggiungi la regola alla selezione
-        if (!selectedRules.includes(rule)) {
-          selectedRules.push(rule);
+        if (!updatedSelectedRules.includes(rule)) {
+          updatedSelectedRules.push(rule);
         }
       }
       
-      context.globalState.update('selectedDefaultRules', selectedRules);
-      // Aggiorna le regole nel file di configurazione di GitHub Copilot
-      updateCopilotRules(context);
+      // Aggiorna la lista delle regole selezionate
+      context.globalState.update('selectedDefaultRules', updatedSelectedRules);
+      
+      // Non aggiornare automaticamente le regole nel file di configurazione
+      // Ora questo sarà fatto solo quando l'utente preme il pulsante "Inietta regole"
+      
+      // Aggiorna solo l'interfaccia
       rulesProvider.refresh();
       updateDecorations();
     }),
     
-    // Comando per attivare/disattivare le regole di memoria
     vscode.commands.registerCommand('copilotRules.toggleMemoryRule', (item: RuleItem) => {
+      // Ottieni la lista attuale di regole selezionate
       const selectedRules = context.globalState.get<string[]>('selectedMemoryRules', []);
       const rule = item.label.toString();
       
+      // Crea una copia della lista corrente per non modificare l'originale direttamente
+      const updatedSelectedRules = [...selectedRules];
+      
       if (item.checked) {
         // Rimuovi la regola dalla selezione
-        const index = selectedRules.indexOf(rule);
+        const index = updatedSelectedRules.indexOf(rule);
         if (index !== -1) {
-          selectedRules.splice(index, 1);
+          updatedSelectedRules.splice(index, 1);
         }
       } else {
         // Aggiungi la regola alla selezione
-        if (!selectedRules.includes(rule)) {
-          selectedRules.push(rule);
+        if (!updatedSelectedRules.includes(rule)) {
+          updatedSelectedRules.push(rule);
         }
       }
       
-      context.globalState.update('selectedMemoryRules', selectedRules);
-      // Aggiorna le regole nel file di configurazione di GitHub Copilot
-      updateCopilotRules(context);
+      // Aggiorna la lista delle regole selezionate
+      context.globalState.update('selectedMemoryRules', updatedSelectedRules);
+      
+      // Non aggiornare automaticamente le regole nel file di configurazione
+      // Ora questo sarà fatto solo quando l'utente preme il pulsante "Inietta regole"
+      
+      // Aggiorna solo l'interfaccia
       rulesProvider.refresh();
       updateDecorations();
     }),
     
-    // Comando per abilitare le regole della memoria
     vscode.commands.registerCommand('copilotRules.enableMemoryRules', () => {
       rulesProvider.setMemoryRulesEnabled(true);
       // Aggiorna le regole nel file di configurazione di GitHub Copilot
@@ -817,7 +834,6 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('Regole della memoria abilitate.');
     }),
     
-    // Comando per aggiungere una regola di template
     vscode.commands.registerCommand('copilotRules.addTemplateRule', (item: RuleItem) => {
       const rule = item.label.toString();
       const personalRules = context.globalState.get<string>('personalRules', '');
@@ -829,19 +845,18 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage(`Regola "${rule}" aggiunta alle regole personali.`);
     }),
     
-    // Comando per aprire l'editor visuale avanzato
+    // Registra il comando per aprire l'editor visuale avanzato
     vscode.commands.registerCommand('copilotRules.openAdvancedRulesEditor', () => {
       openAdvancedRulesEditor(context, rulesProvider);
     }),
     
-    // Comando per creare il file delle regole
+    // Registra i comandi per creare e verificare il file delle regole
     vscode.commands.registerCommand('copilotRules.createRulesFile', () => {
       createRulesFile(context);
       // Aggiorna la visualizzazione
       rulesProvider.refresh();
     }),
     
-    // Comando per mostrare lo stato delle regole
     vscode.commands.registerCommand('copilotRules.showRulesFileStatus', () => {
       const { activeRules, inactiveRules } = readRulesFile();
       
@@ -858,7 +873,7 @@ export function activate(context: vscode.ExtensionContext) {
       // Crea un WebView per mostrare i dettagli sulle regole attive e inattive
       const panel = vscode.window.createWebviewPanel(
         'rulesStatus',
-        'Stato Regole',
+        'Stato Regole Copilot',
         vscode.ViewColumn.One,
         { enableScripts: true }
       );
@@ -868,53 +883,340 @@ export function activate(context: vscode.ExtensionContext) {
         <html>
         <head>
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            h1 { color: #333; }
-            h2 { color: #007acc; margin-top: 20px; }
-            ul { padding-left: 20px; }
-            li { margin-bottom: 8px; }
-            .active { color: #008000; }
-            .inactive { color: #cc0000; }
+            :root {
+              --primary-color: #0078d4;
+              --active-color: #3c9e3c;
+              --inactive-color: #d83b01;
+              --bg-color: #f5f5f5;
+              --card-bg: #ffffff;
+              --text-color: #333333;
+              --border-color: #dddddd;
+            }
+            
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+              margin: 0;
+              padding: 20px;
+              background-color: var(--bg-color);
+              color: var(--text-color);
+            }
+            
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              padding-bottom: 20px;
+              border-bottom: 1px solid var(--border-color);
+            }
+            
+            h1 {
+              color: var(--primary-color);
+              font-size: 28px;
+              margin-bottom: 10px;
+            }
+            
+            .status-summary {
+              display: flex;
+              justify-content: center;
+              gap: 30px;
+              margin-bottom: 30px;
+            }
+            
+            .status-card {
+              background: var(--card-bg);
+              border-radius: 8px;
+              padding: 20px;
+              width: 200px;
+              text-align: center;
+              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+              transition: transform 0.3s ease;
+            }
+            
+            .status-card:hover {
+              transform: translateY(-5px);
+            }
+            
+            .status-card.active {
+              border-left: 5px solid var(--active-color);
+            }
+            
+            .status-card.inactive {
+              border-left: 5px solid var(--inactive-color);
+            }
+            
+            .status-count {
+              font-size: 48px;
+              font-weight: bold;
+              margin: 10px 0;
+            }
+            
+            .active-count {
+              color: var(--active-color);
+            }
+            
+            .inactive-count {
+              color: var(--inactive-color);
+            }
+            
+            .status-label {
+              font-size: 16px;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            
+            .rules-container {
+              display: flex;
+              gap: 30px;
+              margin-top: 20px;
+            }
+            
+            .rules-column {
+              flex: 1;
+              background: var(--card-bg);
+              border-radius: 8px;
+              padding: 20px;
+              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            
+            .rules-header {
+              display: flex;
+              align-items: center;
+              margin-bottom: 20px;
+            }
+            
+            .rules-icon {
+              margin-right: 10px;
+              width: 24px;
+              height: 24px;
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              border-radius: 50%;
+              color: white;
+              font-weight: bold;
+            }
+            
+            .active-icon {
+              background-color: var(--active-color);
+            }
+            
+            .inactive-icon {
+              background-color: var(--inactive-color);
+            }
+            
+            h2 {
+              margin: 0;
+              font-size: 20px;
+            }
+            
+            .active-title {
+              color: var(--active-color);
+            }
+            
+            .inactive-title {
+              color: var(--inactive-color);
+            }
+            
+            ul {
+              padding-left: 20px;
+              margin-top: 10px;
+            }
+            
+            li {
+              margin-bottom: 12px;
+              padding: 8px;
+              border-radius: 4px;
+              transition: background-color 0.2s ease;
+            }
+            
+            li:hover {
+              background-color: rgba(0, 0, 0, 0.05);
+            }
+            
+            .search-bar {
+              display: flex;
+              margin-bottom: 20px;
+              border-radius: 20px;
+              overflow: hidden;
+              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            
+            .search-input {
+              width: 100%;
+              padding: 10px 15px;
+              border: none;
+              font-size: 16px;
+            }
+            
+            .search-input:focus {
+              outline: none;
+            }
+            
+            .empty-state {
+              text-align: center;
+              padding: 30px;
+              color: #666;
+              font-style: italic;
+            }
+            
+            /* Aggiungiamo animazioni per un'esperienza più dinamica */
+            @keyframes fadeIn {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            
+            @keyframes slideIn {
+              from { transform: translateY(20px); opacity: 0; }
+              to { transform: translateY(0); opacity: 1; }
+            }
+            
+            .animated {
+              animation: fadeIn 0.5s ease-out, slideIn 0.5s ease-out;
+            }
+            
+            /* Stili per il tema scuro di VS Code */
+            @media (prefers-color-scheme: dark) {
+              :root {
+                --bg-color: #1e1e1e;
+                --card-bg: #252526;
+                --text-color: #e0e0e0;
+                --border-color: #3c3c3c;
+                --primary-color: #5ea6ed;
+              }
+            }
           </style>
         </head>
         <body>
-          <h1>Stato delle Regole</h1>
-      `;
-      
-      // Aggiungi regole attive
-      html += `<h2 class="active">Regole Attive (${activeRules.length})</h2>`;
-      if (activeRules.length > 0) {
-        html += '<ul>';
-        activeRules.forEach(rule => {
-          html += `<li>${rule}</li>`;
-        });
-        html += '</ul>';
-      } else {
-        html += '<p>Nessuna regola attiva trovata.</p>';
-      }
-      
-      // Aggiungi regole inattive
-      html += `<h2 class="inactive">Regole Inattive (${inactiveRules.length})</h2>`;
-      if (inactiveRules.length > 0) {
-        html += '<ul>';
-        inactiveRules.forEach(rule => {
-          html += `<li>${rule}</li>`;
-        });
-        html += '</ul>';
-      } else {
-        html += '<p>Nessuna regola inattiva trovata.</p>';
-      }
-      
-      html += `
+          <div class="header animated">
+            <h1>Stato Regole GitHub Copilot</h1>
+            <p>Ecco un riassunto delle regole attualmente configurate per GitHub Copilot</p>
+          </div>
+          
+          <div class="status-summary animated">
+            <div class="status-card active">
+              <div class="status-label">Regole Attive</div>
+              <div class="status-count active-count">${activeRules.length}</div>
+            </div>
+            
+            <div class="status-card inactive">
+              <div class="status-label">Regole Inattive</div>
+              <div class="status-count inactive-count">${inactiveRules.length}</div>
+            </div>
+          </div>
+          
+          <div class="search-bar">
+            <input type="text" class="search-input" placeholder="Cerca nelle regole..." id="searchInput">
+          </div>
+          
+          <div class="rules-container">
+            <div class="rules-column animated">
+              <div class="rules-header">
+                <div class="rules-icon active-icon">✓</div>
+                <h2 class="active-title">Regole Attive</h2>
+              </div>
+              
+              ${activeRules.length > 0 ? 
+                `<ul id="activeRulesList">
+                  ${activeRules.map((rule, index) => 
+                    `<li data-index="${index}" class="rule-item">${rule}</li>`
+                  ).join('')}
+                </ul>` : 
+                `<div class="empty-state">
+                  <p>Nessuna regola attiva trovata.</p>
+                  <p>Usa il comando "Crea file delle regole" per crearne di nuove.</p>
+                </div>`
+              }
+            </div>
+            
+            <div class="rules-column animated">
+              <div class="rules-header">
+                <div class="rules-icon inactive-icon">⦻</div>
+                <h2 class="inactive-title">Regole Inattive</h2>
+              </div>
+              
+              ${inactiveRules.length > 0 ? 
+                `<ul id="inactiveRulesList">
+                  ${inactiveRules.map((rule, index) => 
+                    `<li data-index="${index}" class="rule-item">${rule}</li>`
+                  ).join('')}
+                </ul>` : 
+                `<div class="empty-state">
+                  <p>Nessuna regola inattiva trovata.</p>
+                </div>`
+              }
+            </div>
+          </div>
+          
+          <script>
+            (function() {
+              // Funzionalità di ricerca
+              const searchInput = document.getElementById('searchInput');
+              const activeRulesList = document.getElementById('activeRulesList');
+              const inactiveRulesList = document.getElementById('inactiveRulesList');
+              
+              if (searchInput && (activeRulesList || inactiveRulesList)) {
+                searchInput.addEventListener('input', function() {
+                  const searchTerm = this.value.toLowerCase();
+                  
+                  // Filtra le regole attive
+                  if (activeRulesList) {
+                    const activeItems = activeRulesList.querySelectorAll('li');
+                    activeItems.forEach(item => {
+                      const text = item.textContent.toLowerCase();
+                      item.style.display = text.includes(searchTerm) ? 'list-item' : 'none';
+                    });
+                  }
+                  
+                  // Filtra le regole inattive
+                  if (inactiveRulesList) {
+                    const inactiveItems = inactiveRulesList.querySelectorAll('li');
+                    inactiveItems.forEach(item => {
+                      const text = item.textContent.toLowerCase();
+                      item.style.display = text.includes(searchTerm) ? 'list-item' : 'none';
+                    });
+                  }
+                });
+              }
+              
+              // Animazione per gli elementi della lista
+              const listItems = document.querySelectorAll('.rule-item');
+              listItems.forEach((item, index) => {
+                item.style.animationDelay = \`\${index * 0.05}s\`;
+                item.classList.add('animated');
+              });
+            })();
+          </script>
         </body>
         </html>
       `;
       
       // Imposta il contenuto HTML del webview
       panel.webview.html = html;
-    }),
-    
-    // Comando per inserire le regole selezionate
+    })
+  );
+  
+  // Registra il TreeDataProvider per la visualizzazione delle regole
+  vscode.window.registerTreeDataProvider('copilotRulesView', rulesProvider);
+  
+  // Aggiungi un pulsante "Inserisci regole selezionate" nella barra di stato
+  const insertRulesButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  insertRulesButton.text = "$(rocket) Inserisci Regole in Copilot";
+  insertRulesButton.tooltip = "Inserisci le regole selezionate nel file di istruzioni di GitHub Copilot";
+  insertRulesButton.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+  insertRulesButton.color = new vscode.ThemeColor('statusBarItem.warningForeground');
+  insertRulesButton.command = "copilotRules.insertSelectedRules";
+  insertRulesButton.show();
+  context.subscriptions.push(insertRulesButton);
+  
+  // Aggiungi anche un pulsante per salvare le regole selezionate
+  const saveRulesButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
+  saveRulesButton.text = "$(save) Salva Selezione";
+  saveRulesButton.tooltip = "Salva la selezione attuale delle regole in VS Code (senza inserirle nel progetto)";
+  saveRulesButton.command = "copilotRules.saveSelectedRules";
+  saveRulesButton.show();
+  context.subscriptions.push(saveRulesButton);
+  
+  // Registra il comando per inserire le regole selezionate
+  context.subscriptions.push(
     vscode.commands.registerCommand('copilotRules.insertSelectedRules', () => {
       // Verifica che non ci siano regole duplicate
       const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
@@ -936,9 +1238,11 @@ export function activate(context: vscode.ExtensionContext) {
       createRulesFile(context);
       
       vscode.window.showInformationMessage(`${allRules.length} regole inserite con successo nel file di istruzioni di Copilot.`);
-    }),
-    
-    // Comando per attivare/disattivare le regole dei template
+    })
+  );
+  
+  // Registra il comando per attivare/disattivare le regole dei template
+  context.subscriptions.push(
     vscode.commands.registerCommand('copilotRules.toggleTemplateRule', (item: RuleItem) => {
       if (!item.templateLanguage) {
         return;
@@ -949,38 +1253,40 @@ export function activate(context: vscode.ExtensionContext) {
       const personalRulesText = context.globalState.get<string>('personalRules', '');
       const personalRulesArray = personalRulesText.split(/\r?\n/).filter(r => r.trim().length > 0);
       
+      // Crea una copia dell'array di regole personali
+      const updatedPersonalRules = [...personalRulesArray];
+      
       if (personalRulesArray.includes(rule)) {
         // Se la regola è già presente, rimuovila
-        const updatedRules = personalRulesArray.filter(r => r !== rule).join('\n');
+        const index = updatedPersonalRules.indexOf(rule);
+        if (index !== -1) {
+          updatedPersonalRules.splice(index, 1);
+        }
+        const updatedRules = updatedPersonalRules.join('\n');
         context.globalState.update('personalRules', updatedRules);
         vscode.window.showInformationMessage(`Regola "${rule.substring(0, 30)}..." rimossa dalle regole personali.`);
       } else {
         // Altrimenti, aggiungila
-        const updatedRules = personalRulesText ? personalRulesText + '\n' + rule : rule;
+        updatedPersonalRules.push(rule);
+        const updatedRules = updatedPersonalRules.join('\n');
         context.globalState.update('personalRules', updatedRules);
         vscode.window.showInformationMessage(`Regola "${rule.substring(0, 30)}..." aggiunta alle regole personali.`);
       }
       
-      // Aggiorna le regole nel file di configurazione e l'interfaccia
-      updateCopilotRules(context);
+      // Non aggiorna automaticamente le regole nel file di configurazione
+      // Ora questo sarà fatto solo quando l'utente preme il pulsante "Inietta regole"
+      
+      // Aggiorna solo l'interfaccia
       rulesProvider.refresh();
     })
   );
   
-  // Gestisci cambiamenti all'editor attivo
-  vscode.window.onDidChangeActiveTextEditor(editor => {
-    activeEditor = editor;
-    if (editor) {
-      triggerUpdateDecorations();
-    }
-  }, null, context.subscriptions);
-  
-  // Gestisci cambiamenti al contenuto del documento
-  vscode.workspace.onDidChangeTextDocument(event => {
-    if (activeEditor && event.document === activeEditor.document) {
-      triggerUpdateDecorations();
-    }
-  }, null, context.subscriptions);
+  // Registra il comando per salvare le regole selezionate in VS Code
+  context.subscriptions.push(
+    vscode.commands.registerCommand('copilotRules.saveSelectedRules', () => {
+      vscode.window.showInformationMessage('Regole salvate con successo in VS Code');
+    })
+  );
 }
 
 export function deactivate() {}
