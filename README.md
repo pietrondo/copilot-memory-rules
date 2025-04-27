@@ -127,9 +127,12 @@ Poiché questa estensione non è ancora disponibile nel marketplace di VS Code, 
 
 3. Compila l'estensione:
    ```bash
+   npm run compile
+   ```
+   Per avviare la compilazione in modalità watch (ricompila automaticamente quando i file vengono modificati):
+   ```bash
    npm run watch
    ```
-   Questo avvierà la compilazione in modalità watch, che ricompilerà automaticamente quando modifichi i file sorgente.
 
 4. Apri la cartella dell'estensione in VS Code:
    ```bash
@@ -138,16 +141,23 @@ Poiché questa estensione non è ancora disponibile nel marketplace di VS Code, 
 
 5. Premi F5 per avviare una nuova finestra di VS Code con l'estensione caricata in modalità debug.
 
-### Installazione come file VSIX
+### Creazione del file VSIX e installazione
 
-Se preferisci installare l'estensione come file VSIX:
+Per creare un file VSIX installabile e condivisibile:
 
-1. Compila l'estensione in modalità produzione:
+1. Installa vsce (VS Code Extension Manager) se non l'hai già fatto:
    ```bash
-   npm run package
+   npm install -g @vscode/vsce
    ```
 
-2. Installa l'estensione dalla riga di comando:
+2. Compila l'estensione in modalità produzione e crea il pacchetto VSIX:
+   ```bash
+   npm run compile
+   vsce package
+   ```
+   Questo creerà un file .vsix nella directory principale del progetto.
+
+3. Installa l'estensione dalla riga di comando:
    ```bash
    code --install-extension copilot-rules-injector-0.0.1.vsix
    ```
@@ -155,7 +165,7 @@ Se preferisci installare l'estensione come file VSIX:
    - Vai nel pannello Estensioni (Ctrl+Shift+X)
    - Clicca sull'icona "..." in alto a destra
    - Seleziona "Installa da VSIX..."
-   - Naviga e seleziona il file .vsix generato
+   - Naviga e seleziona il file .vsix generato nella directory principale del progetto
 
 ### Aggiornamenti
 
@@ -169,7 +179,26 @@ Per aggiornare l'estensione all'ultima versione:
 2. Reinstalla le dipendenze e ricompila:
    ```bash
    npm install
-   npm run watch
+   npm run compile
    ```
 
 3. Riavvia VS Code o premi F5 per avviare una nuova finestra di debug.
+
+## Nuove funzionalità in sviluppo
+
+Stiamo lavorando all'implementazione di diverse nuove funzionalità:
+
+### Visualizzazioni grafiche per statistiche
+- Grafici a barre per visualizzare l'utilizzo delle regole
+- Dashboard per monitorare quali regole influenzano maggiormente il codice generato
+- Visualizzazione delle tendenze di utilizzo nel tempo
+
+### Miglioramenti UI/UX
+- Animazioni più fluide per il drag-and-drop nell'editor visuale
+- Transizioni migliorate durante la selezione e riordinamento delle regole
+- Feedback visivo durante l'applicazione delle regole
+
+### Sistema di analisi dell'utilizzo
+- Monitoraggio dell'efficacia delle regole sul codice generato
+- Suggerimenti automatici basati sull'utilizzo
+- Metriche per identificare le regole più utili per il tuo stile di codifica

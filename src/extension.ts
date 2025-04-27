@@ -1,6 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 // Template di regole per linguaggi/framework (deve essere dichiarato PRIMA della classe CopilotRulesProvider)
 const languageTemplates: Record<string, string[]> = {
@@ -65,6 +66,14 @@ const languageTemplates: Record<string, string[]> = {
   ]
 };
 
+// Interfaccia per le statistiche di utilizzo delle regole
+interface RuleUsageStats {
+  count: number;
+  lastUsed: string;
+  projects: string[];
+  languages: string[];
+}
+
 class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<RuleItem | undefined | void> = new vscode.EventEmitter<RuleItem | undefined | void>();
   readonly onDidChangeTreeData: vscode.Event<RuleItem | undefined | void> = this._onDidChangeTreeData.event;
@@ -80,13 +89,15 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
     'Per implementazioni complesse, fornisci documentazione dettagliata nei commenti esplicativi.',
     'Evita di generare codice contenente dati sensibili, credenziali o informazioni riservate.',
     'Perfeziona progressivamente le indicazioni in base ai risultati generati.',
-    'Condividi con il gruppo di lavoro le direttive che si sono dimostrate particolarmente efficaci.'
+    'Condividi con il gruppo di lavoro le direttive che si sono dimostrate particolarmente efficaci.',
+    'Documenta errori significativi e relative soluzioni in commenti strutturati con prefisso "ERROR:" seguito da "SOLUTION:" e "CONTEXT:", per costruire una knowledge base accessibile e facilmente consultabile.'
   ];
   public memoryRules: string[] = [
     'Stabilisci un documento README contenente le linee guida e le politiche del progetto.',
     'Implementa un file STATUS.md dedicato al monitoraggio degli sviluppi, delle decisioni strategiche e degli interventi significativi.',
     'Mantieni costantemente aggiornata la documentazione per garantire contesto adeguato sia agli sviluppatori che agli strumenti di intelligenza artificiale.',
-    'Utilizza sistematicamente questi documenti come fonte di riferimento per Copilot e durante i processi di revisione del codice.'
+    'Utilizza sistematicamente questi documenti come fonte di riferimento per Copilot e durante i processi di revisione del codice.',
+    'Documenta in un file ERRORS.md centralizzato tutti gli errori significativi riscontrati, con tre sezioni: descrizione dettagliata del problema, soluzione implementata e contesto in cui si è verificato, per facilitare la risoluzione di problemi simili in futuro.'
   ];
   private getMemoryRulesEnabled(): boolean {
     return this.context.globalState.get<boolean>('enableMemoryRules', false);
@@ -152,18 +163,14 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
     if (element && element.type === 'memory') {
       if (!this.getMemoryRulesEnabled()) {
         return Promise.resolve([
-          new RuleItem('Abilita le regole della memoria', vscode.TreeItemCollapsibleState.None, 'enableMemory', false, false, true),
+          new RuleItem('Le regole della memoria sono disabilitate.', vscode.TreeItemCollapsibleState.None, 'memoryDisabled', false, false, true)
         ]);
       }
       const selected = this.context.globalState.get<string[]>('selectedMemoryRules', []);
-      return Promise.resolve([
-        ...this.memoryRules.map(rule => {
-          const checked = selected.includes(rule);
-          return new RuleItem(rule, vscode.TreeItemCollapsibleState.None, 'memoryRule', checked);
-        }),
-        new RuleItem('Crea/aggiorna README.md e STATUS.md', vscode.TreeItemCollapsibleState.None, 'createMemoryFiles', false, false, false, true),
-        new RuleItem('Disabilita le regole della memoria', vscode.TreeItemCollapsibleState.None, 'disableMemory', false, false, false, false, true)
-      ]);
+      return Promise.resolve(this.memoryRules.map(rule => {
+        const checked = selected.includes(rule);
+        return new RuleItem(rule, vscode.TreeItemCollapsibleState.None, 'memoryRule', checked, false, false, true);
+      }));
     }
     return Promise.resolve([]);
   }
@@ -171,924 +178,429 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
   refresh(): void {
     this._onDidChangeTreeData.fire();
   }
+
+  // Sistema di tracciamento dell'utilizzo delle regole
+  trackRuleUsage(rule: string): void {
+    const ruleUsageStats = this.context.globalState.get<Record<string, RuleUsageStats>>('ruleUsageStats', {});
+    
+    // Ottieni le informazioni sul progetto corrente
+    const projectName = vscode.workspace.name || 'Progetto senza nome';
+    const activeEditor = vscode.window.activeTextEditor;
+    const languageId = activeEditor ? activeEditor.document.languageId : 'unknown';
+    
+    // Se la regola non è ancora stata tracciata, inizializza le statistiche
+    if (!ruleUsageStats[rule]) {
+      ruleUsageStats[rule] = {
+        count: 0,
+        lastUsed: new Date().toISOString(),
+        projects: [],
+        languages: []
+      };
+    }
+    
+    // Aggiorna le statistiche
+    const stats = ruleUsageStats[rule];
+    stats.count++;
+    stats.lastUsed = new Date().toISOString();
+    
+    // Aggiungi il progetto corrente se non è già presente
+    if (projectName && !stats.projects.includes(projectName)) {
+      stats.projects.push(projectName);
+    }
+    
+    // Aggiungi il linguaggio corrente se non è già presente
+    if (languageId && !stats.languages.includes(languageId)) {
+      stats.languages.push(languageId);
+    }
+    
+    // Log per debug (solo durante lo sviluppo)
+    console.log(`Tracciato utilizzo regola: "${rule.substring(0, 30)}..." - Conteggio: ${stats.count}`);
+    
+    // Salva le statistiche aggiornate
+    this.context.globalState.update('ruleUsageStats', ruleUsageStats);
+
+    // Notifica la statusbar per aggiornare il conteggio
+    this._onDidChangeTreeData.fire();
+  }
+
+  // Ottieni le statistiche di utilizzo di una regola specifica
+  getRuleUsageStats(rule: string): RuleUsageStats | undefined {
+    const ruleUsageStats = this.context.globalState.get<Record<string, RuleUsageStats>>('ruleUsageStats', {});
+    return ruleUsageStats[rule];
+  }
+  
+  // Ottieni tutte le statistiche di utilizzo delle regole
+  getAllRuleUsageStats(): Record<string, RuleUsageStats> {
+    return this.context.globalState.get<Record<string, RuleUsageStats>>('ruleUsageStats', {});
+  }
+
+  // Esporta le statistiche di utilizzo
+  exportUsageStats(): string {
+    const stats = this.getAllRuleUsageStats();
+    return JSON.stringify(stats, null, 2);
+  }
+
+  // Importa statistiche di utilizzo
+  importUsageStats(statsJson: string): boolean {
+    try {
+      const stats = JSON.parse(statsJson);
+      this.context.globalState.update('ruleUsageStats', stats);
+      return true;
+    } catch (e) {
+      console.error('Errore durante l\'importazione delle statistiche:', e);
+      return false;
+    }
+  }
+
+  // Resetta le statistiche di utilizzo
+  resetUsageStats(): void {
+    // Utilizziamo la API di vscode per chiedere conferma invece di confirm()
+    vscode.window.showWarningMessage('Sei sicuro di voler azzerare tutte le statistiche di utilizzo? Questa azione non può essere annullata.', 'Sì', 'No')
+      .then(selection => {
+        if (selection === 'Sì') {
+          this.context.globalState.update('ruleUsageStats', {});
+          this._onDidChangeTreeData.fire();
+          vscode.window.showInformationMessage('Statistiche di utilizzo azzerate con successo.');
+        }
+      });
+  }
 }
 
 class RuleItem extends vscode.TreeItem {
-  public type: 'default' | 'personal' | 'defaultRule' | 'personalRule' | 'memory' | 'memoryRule' | 'enableMemory' | 'createMemoryFiles' | 'disableMemory' | 'template' | 'templateGroup' | 'templateRule' | 'openRulesEditorButton';
   constructor(
-    label: string,
-    collapsibleState: vscode.TreeItemCollapsibleState,
-    type: 'default' | 'personal' | 'defaultRule' | 'personalRule' | 'memory' | 'memoryRule' | 'enableMemory' | 'createMemoryFiles' | 'disableMemory' | 'template' | 'templateGroup' | 'templateRule' | 'openRulesEditorButton',
-    checked: boolean = false,
-    editable: boolean = false,
-    isEnableMemoryOption: boolean = false,
-    isCreateMemoryFilesOption: boolean = false,
-    isDisableMemoryOption: boolean = false,
-    templateLang?: string,
-    activeCount?: number
+    public readonly label: string,
+    public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+    public readonly type: string,
+    public readonly checked: boolean = false,
+    public readonly isTextEdit: boolean = false,
+    public readonly isInfo: boolean = false,
+    public readonly isMemory: boolean = false,
+    public readonly isCommand: boolean = false,
+    public readonly templateLanguage?: string,
+    public readonly count?: number
   ) {
-    // Se è stata passata una quantità di regole attive, mostrala nel nome
-    if (activeCount !== undefined) {
-      const badgeLabel = typeof label === 'string' ? label : String(label);
-      super(`${badgeLabel} (${activeCount})`, collapsibleState);
-    } else {
-      super(label, collapsibleState);
+    super(label, collapsibleState);
+    
+    this.tooltip = this.label;
+    
+    if (type === 'default' || type === 'personal' || type === 'memory' || type === 'template') {
+      this.iconPath = new vscode.ThemeIcon('list-unordered');
+      if (count !== undefined && count > 0) {
+        this.description = `${count} ${type === 'personal' ? 'regole' : 'selezionate'}`;
+      }
     }
     
-    this.type = type;
-
-    // Imposta icone distintive per ogni tipo di nodo
-    switch (type) {
-      case 'default':
-        this.iconPath = new vscode.ThemeIcon('book');
-        break;
-      case 'personal':
-        this.iconPath = new vscode.ThemeIcon('person');
-        break;
-      case 'memory':
-        this.iconPath = new vscode.ThemeIcon('database');
-        break;
-      case 'template':
-        this.iconPath = new vscode.ThemeIcon('library');
-        break;
-      case 'templateGroup':
-        this.iconPath = new vscode.ThemeIcon('symbol-class');
-        break;
+    if (type === 'templateGroup') {
+      this.iconPath = new vscode.ThemeIcon('symbol-namespace');
     }
-
-    if (type === 'defaultRule') {
-      this.contextValue = checked ? 'checkedDefaultRule' : 'uncheckedDefaultRule';
-      this.iconPath = new vscode.ThemeIcon(checked ? 'check' : 'circle-outline');
+    
+    if (type === 'defaultRule' || type === 'memoryRule') {
+      this.checkboxState = checked ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
       this.command = {
-        command: 'copilot-rules-injector.toggleDefaultRule',
-        title: 'Seleziona/Deseleziona regola',
-        arguments: [label]
+        title: 'Attiva/disattiva regola',
+        command: type === 'defaultRule' ? 'copilotRules.toggleDefaultRule' : 'copilotRules.toggleMemoryRule',
+        arguments: [this]
       };
     }
-    if (type === 'memoryRule') {
-      this.contextValue = checked ? 'checkedMemoryRule' : 'uncheckedMemoryRule';
-      this.iconPath = new vscode.ThemeIcon(checked ? 'check' : 'circle-outline');
+    
+    if (type === 'personalRule' && isTextEdit) {
+      this.contextValue = 'personalRule';
+    }
+    
+    if (type === 'memoryDisabled') {
+      this.iconPath = new vscode.ThemeIcon('info');
+      this.contextValue = 'memoryDisabled';
       this.command = {
-        command: 'copilot-rules-injector.toggleMemoryRule',
-        title: 'Seleziona/Deseleziona regola memoria',
-        arguments: [label]
+        title: 'Abilita regole della memoria',
+        command: 'copilotRules.enableMemoryRules',
+        arguments: []
       };
     }
-    if (type === 'enableMemory' && isEnableMemoryOption) {
-      this.contextValue = 'enableMemoryOption';
-      this.iconPath = new vscode.ThemeIcon('add');
+    
+    if (type === 'templateRule') {
       this.command = {
-        command: 'copilot-rules-injector.enableMemoryRules',
-        title: 'Abilita regole della memoria'
+        title: 'Aggiungi alle regole personali',
+        command: 'copilotRules.addTemplateRule',
+        arguments: [this]
       };
     }
-    if (type === 'personalRule' && editable) {
-      this.contextValue = 'editablePersonalRule';
-      this.command = {
-        command: 'copilot-rules-injector.editPersonalRules',
-        title: 'Modifica regole personali'
-      };
-    }
-    if (type === 'createMemoryFiles' && isCreateMemoryFilesOption) {
-      this.contextValue = 'createMemoryFilesOption';
-      this.iconPath = new vscode.ThemeIcon('new-file');
-      this.command = {
-        command: 'copilot-rules-injector.createMemoryFiles',
-        title: 'Crea/aggiorna README.md e STATUS.md'
-      };
-    }
-    if (type === 'disableMemory' && isDisableMemoryOption) {
-      this.contextValue = 'disableMemoryOption';
-      this.iconPath = new vscode.ThemeIcon('circle-slash');
-      this.command = {
-        command: 'copilot-rules-injector.disableMemoryRules',
-        title: 'Disabilita regole della memoria'
-      };
-    }
-    if (type === 'templateRule' && templateLang) {
-      this.contextValue = 'templateRule';
-      this.iconPath = new vscode.ThemeIcon('lightbulb');
-      this.command = {
-        command: 'copilot-rules-injector.addSingleTemplateRule',
-        title: 'Aggiungi questa regola ai tuoi template personali',
-        arguments: [label, templateLang]
-      };
-    }
+    
     if (type === 'openRulesEditorButton') {
-      this.contextValue = 'openRulesEditorButton';
       this.iconPath = new vscode.ThemeIcon('edit');
       this.command = {
-        command: 'copilot-rules-injector.openRulesEditor',
-        title: 'Apri editor visuale regole'
+        title: 'Apri editor visuale regole',
+        command: 'copilotRules.openAdvancedRulesEditor',
+        arguments: []
       };
     }
   }
+}
+
+// Comando per aprire l'editor visuale avanzato
+function openAdvancedRulesEditor(context: vscode.ExtensionContext, rulesProvider: CopilotRulesProvider) {
+  // Crea un nuovo webview panel
+  const panel = vscode.window.createWebviewPanel(
+    'copilotRulesEditor',
+    'Editor Avanzato Regole Copilot',
+    vscode.ViewColumn.One,
+    {
+      enableScripts: true,
+      localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'src', 'webviewContent'))]
+    }
+  );
+  
+  // Ottieni il percorso del file HTML dell'editor visuale
+  const htmlPath = vscode.Uri.file(path.join(context.extensionPath, 'src', 'webviewContent', 'advancedRulesEditor.html'));
+  
+  // Leggi il contenuto del file HTML
+  vscode.workspace.fs.readFile(htmlPath).then(data => {
+    // Ottieni il contenuto del file come stringa
+    const htmlContent = data.toString();
+    
+    // Imposta il contenuto HTML del webview
+    panel.webview.html = htmlContent;
+    
+    // Gestisci i messaggi dal webview
+    panel.webview.onDidReceiveMessage(message => {
+      if (message.type === 'initialize') {
+        // Invia i dati iniziali al webview
+        const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
+        const personalRulesText = context.globalState.get<string>('personalRules', '');
+        const personalRules = personalRulesText.split(/\r?\n/).filter(r => r.trim().length > 0);
+        const selectedMemoryRules = context.globalState.get<string[]>('selectedMemoryRules', []);
+        const ruleUsageStats = rulesProvider.getAllRuleUsageStats();
+        
+        panel.webview.postMessage({
+          type: 'update',
+          data: {
+            defaultRules: rulesProvider.defaultRules,
+            memoryRules: rulesProvider.memoryRules,
+            personalRules: personalRules,
+            selectedDefaultRules: selectedDefaultRules,
+            selectedMemoryRules: selectedMemoryRules,
+            templates: languageTemplates,
+            ruleUsageStats: ruleUsageStats
+          }
+        });
+      } else if (message.type === 'save') {
+        // Salva le regole inviate dal webview
+        context.globalState.update('selectedDefaultRules', message.selectedDefaultRules);
+        context.globalState.update('selectedMemoryRules', message.selectedMemoryRules);
+        
+        // Converti le regole personali in una stringa con una riga per regola
+        const personalRulesText = message.personalRules.join('\n');
+        context.globalState.update('personalRules', personalRulesText);
+        
+        // Aggiorna la visualizzazione nella sidebar
+        rulesProvider.refresh();
+        
+        // Mostra un messaggio di conferma
+        vscode.window.showInformationMessage('Regole Copilot salvate con successo.');
+      }
+    });
+  });
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  // Use the console to output diagnostic information (console.log) and errors (console.error)
-  // This line of code will only be executed once when your extension is activated
-  console.log('Congratulations, your extension "copilot-rules-injector" is now active!');
-
-  // The command has been defined in the package.json file
-  // Now provide the implementation of the command with registerCommand
-  // The commandId parameter must match the command field in package.json
-  const disposable = vscode.commands.registerCommand('copilot-rules-injector.helloWorld', () => {
-    // The code you place here will be executed every time your command is executed
-    // Display a message box to the user
-    vscode.window.showInformationMessage('Hello World from Copilot Rules Injector!');
-  });
-
+  // Inizializza il fornitore di regole
   const rulesProvider = new CopilotRulesProvider(context);
-  vscode.window.registerTreeDataProvider('copilotRulesView', rulesProvider);
-
-  // Funzione per salvare tutte le regole selezionate nel file .github/copilot-instructions.md
-  async function saveAllRulesToCopilotInstructions() {
-    const wsFolders = vscode.workspace.workspaceFolders;
-    if (!wsFolders || wsFolders.length === 0) {
-      vscode.window.showErrorMessage('Nessuna cartella di progetto aperta.');
-      return;
-    }
-    
-    const rootPath = wsFolders[0].uri.fsPath;
-    const githubFolder = vscode.Uri.file(`${rootPath}/.github`);
-    const instructionsFile = vscode.Uri.file(`${rootPath}/.github/copilot-instructions.md`);
-    
-    try {
-      // Crea cartella .github se non esiste
-      try {
-        await vscode.workspace.fs.stat(githubFolder);
-      } catch {
-        await vscode.workspace.fs.createDirectory(githubFolder);
-      }
-      
-      // Raccogli tutte le regole selezionate
-      const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
-      const memoryRulesEnabled = context.globalState.get<boolean>('enableMemoryRules', false);
-      const selectedMemoryRules = memoryRulesEnabled ? context.globalState.get<string[]>('selectedMemoryRules', []) : [];
-      const personalRules = context.globalState.get<string>('personalRules', '').split(/\r?\n/).filter(r => r.trim().length > 0);
-      
-      // Componi il contenuto del file
-      let content = '# Regole Copilot\n\n';
-      
-      if (selectedDefaultRules.length > 0) {
-        content += '## Regole di default\n\n';
-        selectedDefaultRules.forEach(rule => {
-          content += `- ${rule}\n`;
-        });
-        content += '\n';
-      }
-      
-      if (selectedMemoryRules.length > 0) {
-        content += '## Regole della memoria\n\n';
-        selectedMemoryRules.forEach(rule => {
-          content += `- ${rule}\n`;
-        });
-        content += '\n';
-      }
-      
-      if (personalRules.length > 0) {
-        content += '## Regole personali\n\n';
-        personalRules.forEach(rule => {
-          content += `- ${rule}\n`;
-        });
-      }
-      
-      // Scrivi il file
-      await vscode.workspace.fs.writeFile(instructionsFile, Buffer.from(content, 'utf8'));
-      vscode.window.showInformationMessage('Regole salvate con successo in .github/copilot-instructions.md!');
-    } catch (err) {
-      vscode.window.showErrorMessage(`Errore nella creazione del file .github/copilot-instructions.md: ${err}`);
-    }
+  
+  // Variabili per tenere traccia dello stato del decoratore
+  let decorationTimeout: NodeJS.Timeout | undefined = undefined;
+  let activeEditor = vscode.window.activeTextEditor;
+  let commentDecorationType = vscode.window.createTextEditorDecorationType({
+    color: '#88c2c2'
+  });
+  
+  // Inizializza il decorator quando cambia l'editor attivo
+  if (activeEditor) {
+    updateDecorations();
   }
-
-  // Aggiorna i comandi esistenti per utilizzare la nuova funzione
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.injectSelectedRules', async () => {
-    // The code you place here will be executed every time your command is executed
-    // Display a message box to the user
-    vscode.window.showInformationMessage('Iniezione regole selezionate in corso...');
-    try {
-      // Salva tutte le regole nel file ufficiale di GitHub Copilot
-      await saveAllRulesToCopilotInstructions();
-    } catch (err) {
-      vscode.window.showErrorMessage(`Errore nell'iniezione delle regole: ${err}`);
-    }
-  }));
-
-  // Modifica il comando enableMemoryRules per usare il nuovo percorso
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.enableMemoryRules', async () => {
-    // Abilita le regole in memoria
-    rulesProvider.setMemoryRulesEnabled(true);
-    
-    // Salva tutte le regole nel file ufficiale di GitHub Copilot
-    await saveAllRulesToCopilotInstructions();
-  }));
-
-  // Aggiungi un nuovo comando per salvare tutte le regole in .github/copilot-instructions.md
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.saveAllRules', async () => {
-    await saveAllRulesToCopilotInstructions();
-  }));
-
-  // Modifica il comando toggleDefaultRule per aggiornare anche le regole nel file
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.toggleDefaultRule', async (rule: string) => {
-    const selected = context.globalState.get<string[]>('selectedDefaultRules', []);
-    const idx = selected.indexOf(rule);
-    if (idx === -1) selected.push(rule); else selected.splice(idx, 1);
-    await context.globalState.update('selectedDefaultRules', selected);
-    rulesProvider.refresh();
-    // Aggiorna il file con le nuove selezioni
-    await saveAllRulesToCopilotInstructions();
-  }));
-
-  // Modifica il comando toggleMemoryRule per aggiornare anche le regole nel file
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.toggleMemoryRule', async (rule: string) => {
-    const selected = context.globalState.get<string[]>('selectedMemoryRules', []);
-    const idx = selected.indexOf(rule);
-    if (idx === -1) {
-      selected.push(rule);
-    } else {
-      selected.splice(idx, 1);
-    }
-    await context.globalState.update('selectedMemoryRules', selected);
-    rulesProvider.refresh();
-    // Aggiorna il file con le nuove selezioni
-    await saveAllRulesToCopilotInstructions();
-  }));
-
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.addSingleTemplateRule', async (rule: string, lang: string) => {
-    const current = context.globalState.get<string>('personalRules', '');
-    const currentArr = current ? current.split(/\r?\n/) : [];
-    if (!currentArr.includes(rule)) {
-      currentArr.push(rule);
-      await context.globalState.update('personalRules', currentArr.join('\n'));
-      rulesProvider.refresh();
-      vscode.window.showInformationMessage(`Regola aggiunta dalle ${lang} alle tue regole personali!`);
-    } else {
-      vscode.window.showInformationMessage('Questa regola è già presente tra le tue regole personali.');
-    }
-  }));
-
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.editPersonalRules', async () => {
-    const current = context.globalState.get<string>('personalRules', '');
-    const result = await vscode.window.showInputBox({
-      value: current,
-      prompt: 'Inserisci o modifica le tue regole personali (separate da una nuova riga)',
-      placeHolder: 'Scrivi qui le tue regole personali...'
-    });
-    if (result !== undefined) {
-      context.globalState.update('personalRules', result);
-      rulesProvider.refresh();
-    }
-  }));
-
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.addTemplateRules', async () => {
-    const langs = Object.keys(languageTemplates);
-    const pickedLang = await vscode.window.showQuickPick(langs, { placeHolder: 'Scegli un template di regole da aggiungere' });
-    if (!pickedLang) return;
-    const rules = languageTemplates[pickedLang];
-    // Aggiungi le regole selezionate a quelle personali
-    const current = context.globalState.get<string>('personalRules', '');
-    const currentArr = current ? current.split(/\r?\n/) : [];
-    const newArr = [...currentArr, ...rules.filter(r => !currentArr.includes(r))];
-    await context.globalState.update('personalRules', newArr.join('\n'));
-    rulesProvider.refresh();
-    vscode.window.showInformationMessage(`Regole ${pickedLang} aggiunte alle tue regole personali!`);
-  }));
-
-  // Esportazione regole selezionate
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.exportRules', async () => {
-    const selectedDefault = context.globalState.get<string[]>('selectedDefaultRules', []);
-    const selectedMemory = context.globalState.get<boolean>('enableMemoryRules', false)
-      ? context.globalState.get<string[]>('selectedMemoryRules', [])
-      : [];
-    const personalRules = context.globalState.get<string>('personalRules', '').split(/\r?\n/).filter(r => r.trim().length > 0);
-    const allRules = [
-      ...selectedDefault.map(r => ({ type: 'default', rule: r })),
-      ...selectedMemory.map(r => ({ type: 'memory', rule: r })),
-      ...personalRules.map(r => ({ type: 'personal', rule: r }))
-    ];
-    if (allRules.length === 0) {
-      vscode.window.showWarningMessage('Nessuna regola da esportare.');
+  
+  // Funzione per aggiornare i decoratori di commento
+  function updateDecorations() {
+    if (!activeEditor) {
       return;
     }
-    const uri = await vscode.window.showSaveDialog({
-      filters: { 'JSON': ['json'] },
-      saveLabel: 'Esporta regole selezionate'
-    });
-    if (!uri) return;
-    await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(allRules, null, 2), 'utf8'));
-    vscode.window.showInformationMessage('Regole esportate con successo!');
-  }));
-
-  // Importazione regole da file JSON
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.importRules', async () => {
-    const uris = await vscode.window.showOpenDialog({
-      canSelectMany: false,
-      filters: { 'JSON': ['json'] },
-      openLabel: 'Importa regole'
-    });
-    if (!uris || uris.length === 0) return;
-    const file = await vscode.workspace.fs.readFile(uris[0]);
-    let imported: any[] = [];
-    try {
-      imported = JSON.parse(file.toString());
-    } catch {
-      vscode.window.showErrorMessage('File non valido.');
-      return;
-    }
-    // Aggiungi le regole importate a quelle personali (evita duplicati)
-    const personal = imported.filter(r => r.type === 'personal').map(r => r.rule);
-    const current = context.globalState.get<string>('personalRules', '');
-    const currentArr = current ? current.split(/\r?\n/) : [];
-    const newArr = [...currentArr, ...personal.filter(r => !currentArr.includes(r))];
-    await context.globalState.update('personalRules', newArr.join('\n'));
-    rulesProvider.refresh();
-    vscode.window.showInformationMessage('Regole personali importate con successo!');
-  }));
-
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.openRulesEditor', () => {
-    const panel = vscode.window.createWebviewPanel(
-      'rulesEditor',
-      'Editor Visuale Regole Copilot',
-      vscode.ViewColumn.One,
-      { enableScripts: true }
-    );
-    // Recupera tutte le regole
-    const defaultRules = rulesProvider.defaultRules;
-    const memoryRules = rulesProvider.memoryRules;
-    const personalRules = (context.globalState.get<string>('personalRules', '') || '').split(/\r?\n/).filter(r => r.trim().length > 0);
     const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
-    const selectedMemoryRules = context.globalState.get<string[]>('selectedMemoryRules', []);
-    
-    // HTML migliorato per la webview con CSS e funzionalità drag and drop
-    panel.webview.html = `
-      <html>
-      <head>
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-            padding: 20px;
-            color: var(--vscode-foreground);
-            background-color: var(--vscode-editor-background);
-          }
-          h1 {
-            color: var(--vscode-editor-foreground);
-            border-bottom: 1px solid var(--vscode-panel-border);
-            padding-bottom: 10px;
-          }
-          h2 {
-            margin-top: 25px;
-            color: var(--vscode-panelTitle-activeForeground);
-            font-size: 1.2em;
-          }
-          .section {
-            margin-bottom: 30px;
-            background-color: var(--vscode-editor-background);
-            border-radius: 6px;
-            padding: 15px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-          }
-          .rule-container {
-            list-style-type: none;
-            padding: 0;
-          }
-          .rule-item {
-            display: flex;
-            align-items: center;
-            padding: 8px 10px;
-            margin-bottom: 8px;
-            background-color: var(--vscode-list-activeSelectionBackground);
-            border-radius: 4px;
-            transition: all 0.2s;
-            cursor: move;
-          }
-          .rule-item:hover {
-            background-color: var(--vscode-list-hoverBackground);
-          }
-          .rule-item.dragging {
-            opacity: 0.5;
-          }
-          .rule-checkbox {
-            margin-right: 10px;
-          }
-          .rule-item input[type="text"] {
-            flex-grow: 1;
-            background-color: var(--vscode-input-background);
-            color: var(--vscode-input-foreground);
-            border: 1px solid var(--vscode-input-border);
-            padding: 6px 8px;
-            border-radius: 3px;
-            font-size: 14px;
-          }
-          .rule-item button {
-            background-color: var(--vscode-button-secondaryBackground);
-            color: var(--vscode-button-secondaryForeground);
-            border: none;
-            padding: 6px 10px;
-            margin-left: 10px;
-            border-radius: 3px;
-            cursor: pointer;
-          }
-          .rule-item button:hover {
-            background-color: var(--vscode-button-secondaryHoverBackground);
-          }
-          .rule-item .drag-handle {
-            cursor: move;
-            padding: 5px;
-            margin-right: 8px;
-            color: var(--vscode-descriptionForeground);
-          }
-          .add-button, .save-button {
-            background-color: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            padding: 8px 12px;
-            margin-top: 10px;
-            margin-right: 10px;
-            border-radius: 3px;
-            cursor: pointer;
-            font-weight: 500;
-          }
-          .add-button:hover, .save-button:hover {
-            background-color: var(--vscode-button-hoverBackground);
-          }
-          .rule-text {
-            flex-grow: 1;
-            padding: 6px 0;
-          }
-          /* Stile dei placeholder durante il drag and drop */
-          .rule-item.sortable-ghost {
-            opacity: 0.2;
-            background-color: var(--vscode-editor-selectionBackground);
-          }
-          .rule-item.sortable-chosen {
-            background-color: var(--vscode-list-focusBackground);
-          }
-        </style>
-      </head>
-      <body>
-        <h1>Editor Visuale Regole Copilot</h1>
-        
-        <div class="section">
-          <h2>📚 Regole di default</h2>
-          <ul class="rule-container default-rules">
-            ${defaultRules.map(r => `
-              <li class="rule-item">
-                <input type="checkbox" class="rule-checkbox" data-rule="${r}" ${selectedDefaultRules.includes(r) ? 'checked' : ''}>
-                <span class="rule-text">${r}</span>
-              </li>
-            `).join('')}
-          </ul>
-        </div>
-        
-        <div class="section">
-          <h2>🗄️ Regole della memoria</h2>
-          <ul class="rule-container memory-rules">
-            ${memoryRules.map(r => `
-              <li class="rule-item">
-                <input type="checkbox" class="rule-checkbox" data-rule="${r}" ${selectedMemoryRules.includes(r) ? 'checked' : ''}>
-                <span class="rule-text">${r}</span>
-              </li>
-            `).join('')}
-          </ul>
-        </div>
-        
-        <div class="section">
-          <h2>👤 Regole personali</h2>
-          <ul id="personalRules" class="rule-container personal-rules">
-            ${personalRules.map((r, i) => `
-              <li class="rule-item" draggable="true">
-                <span class="drag-handle">⋮⋮</span>
-                <input type="text" value="${r}" data-idx="${i}" class="rule-input">
-                <button class="delete-button" data-del="${i}">Elimina</button>
-              </li>
-            `).join('')}
-          </ul>
-          <button id="addRule" class="add-button">+ Aggiungi regola personale</button>
-        </div>
-        
-        <button id="save" class="save-button">💾 Salva tutte le regole</button>
-        
-        <script>
-          const vscode = acquireVsCodeApi();
-          
-          // Drag and drop per le regole personali
-          const personalRulesList = document.getElementById('personalRules');
-          let draggedItem = null;
-          
-          // Implementazione base di drag and drop
-          document.querySelectorAll('.rule-item').forEach(item => {
-            item.addEventListener('dragstart', function() {
-              draggedItem = this;
-              setTimeout(() => this.classList.add('dragging'), 0);
-            });
-            
-            item.addEventListener('dragend', function() {
-              this.classList.remove('dragging');
-              draggedItem = null;
-            });
-            
-            item.addEventListener('dragover', function(e) {
-              e.preventDefault();
-              if (draggedItem !== this && draggedItem.parentElement === this.parentElement) {
-                const rect = this.getBoundingClientRect();
-                const y = e.clientY - rect.top;
-                if (y < rect.height / 2) {
-                  this.parentElement.insertBefore(draggedItem, this);
-                } else {
-                  this.parentElement.insertBefore(draggedItem, this.nextSibling);
-                }
-              }
-            });
-          });
-          
-          // Aggiunta nuova regola personale
-          document.getElementById('addRule').onclick = () => {
-            const ul = document.getElementById('personalRules');
-            const li = document.createElement('li');
-            li.className = 'rule-item';
-            li.draggable = true;
-            li.innerHTML = '<span class="drag-handle">⋮⋮</span><input type="text" value="" data-idx="new" class="rule-input"> <button class="delete-button" data-del="new">Elimina</button>';
-            
-            // Aggiungi listener drag and drop anche al nuovo elemento
-            li.addEventListener('dragstart', function() {
-              draggedItem = this;
-              setTimeout(() => this.classList.add('dragging'), 0);
-            });
-            
-            li.addEventListener('dragend', function() {
-              this.classList.remove('dragging');
-              draggedItem = null;
-            });
-            
-            li.addEventListener('dragover', function(e) {
-              e.preventDefault();
-              if (draggedItem !== this && draggedItem.parentElement === this.parentElement) {
-                const rect = this.getBoundingClientRect();
-                const y = e.clientY - rect.top;
-                if (y < rect.height / 2) {
-                  this.parentElement.insertBefore(draggedItem, this);
-                } else {
-                  this.parentElement.insertBefore(draggedItem, this.nextSibling);
-                }
-              }
-            });
-            
-            ul.appendChild(li);
-          };
-          
-          // Salva tutte le regole
-          document.getElementById('save').onclick = () => {
-            // Regole personali
-            const inputs = Array.from(document.querySelectorAll('#personalRules input.rule-input'));
-            const personalRules = inputs.map(i => i.value).filter(v => v.trim().length > 0);
-            
-            // Regole di default selezionate
-            const defaultRules = Array.from(document.querySelectorAll('.default-rules input:checked'))
-              .map(checkbox => checkbox.getAttribute('data-rule'));
-            
-            // Regole della memoria selezionate
-            const memoryRules = Array.from(document.querySelectorAll('.memory-rules input:checked'))
-              .map(checkbox => checkbox.getAttribute('data-rule'));
-            
-            vscode.postMessage({ 
-              type: 'save', 
-              personalRules,
-              defaultRules,
-              memoryRules
-            });
-          };
-          
-          // Eliminazione regole
-          document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('delete-button')) {
-              e.target.closest('.rule-item').remove();
-            }
-          });
-        </script>
-      </body>
-      </html>
-    `;
-
-    // Gestione messaggi dalla webview
-    panel.webview.onDidReceiveMessage(async msg => {
-      if (msg.type === 'save') {
-        // Salva regole personali
-        await context.globalState.update('personalRules', msg.personalRules.join('\n'));
-        
-        // Salva regole default selezionate
-        await context.globalState.update('selectedDefaultRules', msg.defaultRules);
-        
-        // Salva regole memoria selezionate
-        await context.globalState.update('selectedMemoryRules', msg.memoryRules);
-        
-        // Aggiorna le regole nel file GitHub
-        await saveAllRulesToCopilotInstructions();
-        
-        rulesProvider.refresh();
-        vscode.window.showInformationMessage('Tutte le regole sono state aggiornate!');
-      }
-    });
-  }));
-
-  // Suggerimenti dinamici (bozza):
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.suggestRules', async () => {
-    const suggestions: string[] = [];
-    // Esempio: cerca uso di 'var' in file JS/TS
-    const files = await vscode.workspace.findFiles('**/*.{js,ts}', '**/node_modules/**', 20);
-    for (const file of files) {
-      const doc = await vscode.workspace.openTextDocument(file);
-      if (/\bvar\b/.test(doc.getText())) {
-        suggestions.push("Evita l'uso di 'var', preferisci let/const.");
-        break;
-      }
-    }
-    // Esempio: cerca funzioni Python senza docstring
-    const pyFiles = await vscode.workspace.findFiles('**/*.py', '**/venv/**', 20);
-    for (const file of pyFiles) {
-      const doc = await vscode.workspace.openTextDocument(file);
-      if (/def [a-zA-Z0-9_]+\(.*\):\n(?!\s+""")/.test(doc.getText())) {
-        suggestions.push('Aggiungi docstring alle funzioni Python.');
-        break;
-      }
-    }
-    if (suggestions.length === 0) {
-      vscode.window.showInformationMessage('Nessun suggerimento di nuove regole trovato!');
-      return;
-    }
-    const picked = await vscode.window.showQuickPick(suggestions, { canPickMany: true, placeHolder: 'Suggerimenti di regole da aggiungere' });
-    if (picked && picked.length > 0) {
-      const current = context.globalState.get<string>('personalRules', '');
-      const currentArr = current ? current.split(/\r?\n/) : [];
-      const newArr = [...currentArr, ...picked.filter(r => !currentArr.includes(r))];
-      await context.globalState.update('personalRules', newArr.join('\n'));
-      rulesProvider.refresh();
-      vscode.window.showInformationMessage('Suggerimenti aggiunti alle regole personali!');
-    }
-  }));
-
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.createMemoryFiles', async () => {
-    const wsFolders = vscode.workspace.workspaceFolders;
-    if (!wsFolders || wsFolders.length === 0) {
-      vscode.window.showErrorMessage('Nessuna cartella di progetto aperta.');
-      return;
-    }
-    const rootPath = wsFolders[0].uri.fsPath;
-    const readmePath = vscode.Uri.file(`${rootPath}/README.md`);
-    const statusPath = vscode.Uri.file(`${rootPath}/STATUS.md`);
-    const readmeContent = `# Regole del progetto\n\nQui vengono raccolte le regole e le linee guida del progetto.\n\nAggiorna questo file per mantenere la memoria storica e il contesto per Copilot e il team.`;
-    const statusContent = `# Stato del progetto\n\n- Data: ${new Date().toISOString().slice(0, 10)}\n- Progresso: Inizia a tracciare qui le decisioni, i cambiamenti e i progressi principali.\n`;
-    try {
-      await vscode.workspace.fs.writeFile(readmePath, Buffer.from(readmeContent, 'utf8'));
-      await vscode.workspace.fs.writeFile(statusPath, Buffer.from(statusContent, 'utf8'));
-      vscode.window.showInformationMessage('README.md e STATUS.md creati/aggiornati nella root del progetto.');
-    } catch (err) {
-      vscode.window.showErrorMessage('Errore nella creazione dei file README.md o STATUS.md: ' + err);
-    }
-  }));
-
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.disableMemoryRules', () => {
-    rulesProvider.setMemoryRulesEnabled(false);
-  }));
-
-  context.subscriptions.push(disposable);
-
-  // Indicatore status bar per regole attive
-  const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusBarItem.command = 'copilot-rules-injector.openRulesEditor';
-  context.subscriptions.push(statusBarItem);
-
-  // Funzione per aggiornare l'indicatore della status bar
-  function updateStatusBar() {
-    const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
-    const personalRules = context.globalState.get<string>('personalRules', '').split(/\r?\n/).filter(r => r.trim().length > 0);
+    const personalRulesText = context.globalState.get<string>('personalRules', '');
+    let personalRulesArray = personalRulesText.split(/\r?\n/).filter((r: string) => r.trim().length > 0);
     const memoryRulesEnabled = context.globalState.get<boolean>('enableMemoryRules', false);
     const selectedMemoryRules = memoryRulesEnabled ? context.globalState.get<string[]>('selectedMemoryRules', []) : [];
     
-    const totalActiveRules = selectedDefaultRules.length + personalRules.length + selectedMemoryRules.length;
+    // Combino tutte le regole attive
+    const allRules = [...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules];
     
-    if (totalActiveRules > 0) {
-      statusBarItem.text = `$(copilot) Regole Copilot: ${totalActiveRules}`;
-      statusBarItem.tooltip = `${selectedDefaultRules.length} regole default, ${personalRules.length} regole personali, ${selectedMemoryRules.length} regole memoria`;
-      statusBarItem.show();
-    } else {
-      statusBarItem.text = `$(copilot) Nessuna regola attiva`;
-      statusBarItem.tooltip = 'Clicca per configurare le regole di Copilot';
-      statusBarItem.show();
+    // Se non ci sono regole attive, non applicare decorazioni
+    if (allRules.length === 0) {
+      activeEditor.setDecorations(commentDecorationType, []);
+      return;
     }
-  }
-
-  // Aggiorna la status bar quando le regole cambiano
-  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.updateStatusBar', () => {
-    updateStatusBar();
-  }));
-
-  // Modifica tutti i comandi che alterano le regole per aggiornare la status bar
-  const originalRefresh = rulesProvider.refresh;
-  rulesProvider.refresh = () => {
-    originalRefresh.call(rulesProvider);
-    updateStatusBar();
-  };
-
-  // Inizializza la status bar
-  updateStatusBar();
-
-  // Mostra pagina di benvenuto al primo avvio
-  const hasShownWelcomePage = context.globalState.get<boolean>('hasShownWelcomePage', false);
-  if (!hasShownWelcomePage) {
-    showWelcomePage(context);
-    context.globalState.update('hasShownWelcomePage', true);
-  }
-}
-
-// Funzione per mostrare la pagina di benvenuto
-function showWelcomePage(context: vscode.ExtensionContext) {
-  const panel = vscode.window.createWebviewPanel(
-    'copilotRulesWelcome',
-    'Benvenuto in Copilot Rules Injector',
-    vscode.ViewColumn.One,
-    { enableScripts: true }
-  );
-
-  const iconPath = vscode.Uri.file(
-    vscode.Uri.joinPath(context.extensionUri, 'icon.svg').fsPath
-  );
-
-  panel.iconPath = iconPath;
-
-  panel.webview.html = `
-    <!DOCTYPE html>
-    <html lang="it">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Benvenuto in Copilot Rules Injector</title>
-        <style>
-            body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-                padding: 20px;
-                color: var(--vscode-foreground);
-                background-color: var(--vscode-editor-background);
-                max-width: 800px;
-                margin: 0 auto;
-            }
-            h1 {
-                color: var(--vscode-editor-foreground);
-                border-bottom: 1px solid var(--vscode-panel-border);
-                padding-bottom: 10px;
-                text-align: center;
-            }
-            .logo {
-                text-align: center;
-                margin: 20px 0;
-            }
-            .logo img {
-                width: 100px;
-                height: 100px;
-            }
-            .section {
-                margin-bottom: 30px;
-                background-color: var(--vscode-editor-background);
-                border-radius: 6px;
-                padding: 15px;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-            }
-            h2 {
-                color: var(--vscode-panelTitle-activeForeground);
-            }
-            .feature {
-                display: flex;
-                align-items: flex-start;
-                margin-bottom: 15px;
-            }
-            .feature-icon {
-                font-size: 24px;
-                margin-right: 15px;
-                color: var(--vscode-textLink-foreground);
-            }
-            .feature-text {
-                flex: 1;
-            }
-            .button-container {
-                display: flex;
-                justify-content: center;
-                margin-top: 30px;
-            }
-            button {
-                background-color: var(--vscode-button-background);
-                color: var(--vscode-button-foreground);
-                border: none;
-                padding: 10px 20px;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 14px;
-                margin: 0 10px;
-            }
-            button:hover {
-                background-color: var(--vscode-button-hoverBackground);
-            }
-            .steps {
-                margin-left: 20px;
-            }
-            .steps li {
-                margin-bottom: 10px;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="logo">
-            <img src="https://raw.githubusercontent.com/github/copilot.vim/main/doc/copilot.svg" alt="Copilot Logo">
-        </div>
-        <h1>Benvenuto in Copilot Rules Injector</h1>
+    
+    // Cerca il pattern di commento adatto al linguaggio
+    const languageId = activeEditor.document.languageId;
+    let lineCommentPrefix = '//';
+    let blockCommentStart = '/*';
+    let blockCommentEnd = '*/';
+    
+    if (languageId === 'python' || languageId === 'jupyter') {
+      lineCommentPrefix = '#';
+      blockCommentStart = '"""';
+      blockCommentEnd = '"""';
+    } else if (languageId === 'html' || languageId === 'xml') {
+      lineCommentPrefix = '';
+      blockCommentStart = '<!--';
+      blockCommentEnd = '-->';
+    }
+    
+    // Trova tutti i commenti nel documento
+    const text = activeEditor.document.getText();
+    let decorations: vscode.DecorationOptions[] = [];
+    let match;
+    
+    const lineCommentRegex = new RegExp(`${escapeRegExp(lineCommentPrefix)}.*$`, 'gm');
+    if (lineCommentPrefix) {
+      // eslint-disable-next-line no-cond-assign
+      while (match = lineCommentRegex.exec(text)) {
+        const startPos = activeEditor.document.positionAt(match.index);
+        const endPos = activeEditor.document.positionAt(match.index + match[0].length);
         
-        <div class="section">
-            <h2>Cos'è Copilot Rules Injector?</h2>
-            <p>Questa estensione ti permette di gestire in modo semplice e potente le regole per GitHub Copilot, migliorando la qualità del codice generato dall'IA in base alle tue preferenze e alle best practice del tuo team.</p>
-        </div>
-        
-        <div class="section">
-            <h2>Caratteristiche principali</h2>
+        // Controllo se il commento contiene una delle regole
+        for (const rule of allRules) {
+          if (match[0].toLowerCase().includes(rule.toLowerCase())) {
+            // Traccia l'utilizzo della regola trovata
+            rulesProvider.trackRuleUsage(rule);
             
-            <div class="feature">
-                <div class="feature-icon">📚</div>
-                <div class="feature-text">
-                    <strong>Regole di default</strong>
-                    <p>Seleziona tra regole predefinite per migliorare l'output di Copilot per qualsiasi progetto.</p>
-                </div>
-            </div>
-            
-            <div class="feature">
-                <div class="feature-icon">👤</div>
-                <div class="feature-text">
-                    <strong>Regole personali</strong>
-                    <p>Crea e modifica le tue regole personalizzate per adattarle alle tue esigenze specifiche.</p>
-                </div>
-            </div>
-            
-            <div class="feature">
-                <div class="feature-icon">🗄️</div>
-                <div class="feature-text">
-                    <strong>Regole della memoria</strong>
-                    <p>Mantieni il contesto del progetto con regole che aiutano Copilot a comprendere meglio il tuo lavoro.</p>
-                </div>
-            </div>
-            
-            <div class="feature">
-                <div class="feature-icon">🧩</div>
-                <div class="feature-text">
-                    <strong>Template per linguaggi/framework</strong>
-                    <p>Aggiungi regole specifiche per JavaScript, Python, TypeScript, React, Node.js, Django e altri.</p>
-                </div>
-            </div>
-        </div>
-        
-        <div class="section">
-            <h2>Come iniziare</h2>
-            <ol class="steps">
-                <li>Apri la sidebar di Copilot Rules Injector nell'activity bar di VS Code.</li>
-                <li>Seleziona le regole di default che vuoi attivare.</li>
-                <li>Aggiungi regole dai template per i linguaggi/framework che utilizzi.</li>
-                <li>Crea regole personali specifiche per il tuo progetto.</li>
-                <li>Tutte le regole selezionate verranno automaticamente salvate nel file <code>.github/copilot-instructions.md</code>.</li>
-            </ol>
-        </div>
-        
-        <div class="button-container">
-            <button id="openSidebar">Apri Sidebar</button>
-            <button id="openEditor">Apri Editor Visuale</button>
-        </div>
-        
-        <script>
-            const vscode = acquireVsCodeApi();
-            
-            document.getElementById('openSidebar').addEventListener('click', () => {
-                vscode.postMessage({ command: 'openSidebar' });
-            });
-            
-            document.getElementById('openEditor').addEventListener('click', () => {
-                vscode.postMessage({ command: 'openEditor' });
-            });
-        </script>
-    </body>
-    </html>
-  `;
-
-  // Gestisci i messaggi dalla webview
-  panel.webview.onDidReceiveMessage(
-    message => {
-      switch (message.command) {
-        case 'openSidebar':
-          vscode.commands.executeCommand('workbench.view.extension.copilotRulesActivityBar');
-          return;
-        case 'openEditor':
-          vscode.commands.executeCommand('copilot-rules-injector.openRulesEditor');
-          return;
+            decorations.push({ range: new vscode.Range(startPos, endPos) });
+            break;
+          }
+        }
       }
-    },
-    undefined,
-    context.subscriptions
+    }
+    
+    // Trova blocchi di commento
+    if (blockCommentStart && blockCommentEnd) {
+      const blockCommentRegex = new RegExp(`${escapeRegExp(blockCommentStart)}([\\s\\S]*?)${escapeRegExp(blockCommentEnd)}`, 'g');
+      // eslint-disable-next-line no-cond-assign
+      while (match = blockCommentRegex.exec(text)) {
+        const startPos = activeEditor.document.positionAt(match.index);
+        const endPos = activeEditor.document.positionAt(match.index + match[0].length);
+        
+        // Controllo se il commento contiene una delle regole
+        for (const rule of allRules) {
+          if (match[0].toLowerCase().includes(rule.toLowerCase())) {
+            // Traccia l'utilizzo della regola trovata
+            rulesProvider.trackRuleUsage(rule);
+            
+            decorations.push({ range: new vscode.Range(startPos, endPos) });
+            break;
+          }
+        }
+      }
+    }
+    
+    // Applica le decorazioni
+    activeEditor.setDecorations(commentDecorationType, decorations);
+  }
+  
+  // Funzione per gestire il debounce
+  function triggerUpdateDecorations() {
+    if (decorationTimeout) {
+      clearTimeout(decorationTimeout);
+      decorationTimeout = undefined;
+    }
+    decorationTimeout = setTimeout(updateDecorations, 500);
+  }
+  
+  // Registra i comandi
+  // Registra comandi per l'attivazione/disattivazione delle regole
+  context.subscriptions.push(
+    vscode.commands.registerCommand('copilotRules.toggleDefaultRule', (item: RuleItem) => {
+      const selectedRules = context.globalState.get<string[]>('selectedDefaultRules', []);
+      const rule = item.label.toString();
+      
+      if (item.checked) {
+        // Rimuovi la regola dalla selezione
+        const index = selectedRules.indexOf(rule);
+        if (index !== -1) {
+          selectedRules.splice(index, 1);
+        }
+      } else {
+        // Aggiungi la regola alla selezione
+        if (!selectedRules.includes(rule)) {
+          selectedRules.push(rule);
+        }
+      }
+      
+      context.globalState.update('selectedDefaultRules', selectedRules);
+      rulesProvider.refresh();
+      updateDecorations();
+    }),
+    
+    vscode.commands.registerCommand('copilotRules.toggleMemoryRule', (item: RuleItem) => {
+      const selectedRules = context.globalState.get<string[]>('selectedMemoryRules', []);
+      const rule = item.label.toString();
+      
+      if (item.checked) {
+        // Rimuovi la regola dalla selezione
+        const index = selectedRules.indexOf(rule);
+        if (index !== -1) {
+          selectedRules.splice(index, 1);
+        }
+      } else {
+        // Aggiungi la regola alla selezione
+        if (!selectedRules.includes(rule)) {
+          selectedRules.push(rule);
+        }
+      }
+      
+      context.globalState.update('selectedMemoryRules', selectedRules);
+      rulesProvider.refresh();
+      updateDecorations();
+    }),
+    
+    vscode.commands.registerCommand('copilotRules.enableMemoryRules', () => {
+      rulesProvider.setMemoryRulesEnabled(true);
+      vscode.window.showInformationMessage('Regole della memoria abilitate.');
+    }),
+    
+    vscode.commands.registerCommand('copilotRules.addTemplateRule', (item: RuleItem) => {
+      const rule = item.label.toString();
+      const personalRules = context.globalState.get<string>('personalRules', '');
+      const updatedRules = personalRules ? personalRules + '\n' + rule : rule;
+      context.globalState.update('personalRules', updatedRules);
+      rulesProvider.refresh();
+      vscode.window.showInformationMessage(`Regola "${rule}" aggiunta alle regole personali.`);
+    }),
+    
+    // Registra il comando per aprire l'editor visuale avanzato
+    vscode.commands.registerCommand('copilotRules.openAdvancedRulesEditor', () => {
+      openAdvancedRulesEditor(context, rulesProvider);
+    })
   );
+  
+  // Registra il TreeDataProvider per la visualizzazione delle regole
+  vscode.window.registerTreeDataProvider('copilotRulesView', rulesProvider);
+  
+  // Gestisci cambiamenti all'editor attivo
+  vscode.window.onDidChangeActiveTextEditor(editor => {
+    activeEditor = editor;
+    if (editor) {
+      triggerUpdateDecorations();
+    }
+  }, null, context.subscriptions);
+  
+  // Gestisci cambiamenti al contenuto del documento
+  vscode.workspace.onDidChangeTextDocument(event => {
+    if (activeEditor && event.document === activeEditor.document) {
+      triggerUpdateDecorations();
+    }
+  }, null, context.subscriptions);
 }
 
-// This method is called when your extension is deactivated
+// Funzione utility per fare l'escape dei caratteri speciali nelle regex
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function deactivate() {}
