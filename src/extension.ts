@@ -746,9 +746,20 @@ export function activate(context: vscode.ExtensionContext) {
     decorationTimeout = setTimeout(updateDecorations, 500);
   }
   
+  // Registra il TreeDataProvider per la visualizzazione delle regole
+  vscode.window.registerTreeDataProvider('copilotRulesView', rulesProvider);
+  
+  // Aggiungi un pulsante "Inserisci regole selezionate" nella barra di stato
+  const insertRulesButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  insertRulesButton.text = "$(zap) Inserisci regole selezionate";
+  insertRulesButton.tooltip = "Inserisci le regole selezionate nel file di istruzioni di Copilot";
+  insertRulesButton.command = "copilotRules.insertSelectedRules";
+  insertRulesButton.show();
+  context.subscriptions.push(insertRulesButton);
+  
   // Registra i comandi
-  // Registra comandi per l'attivazione/disattivazione delle regole
   context.subscriptions.push(
+    // Comando per attivare/disattivare le regole di default
     vscode.commands.registerCommand('copilotRules.toggleDefaultRule', (item: RuleItem) => {
       const selectedRules = context.globalState.get<string[]>('selectedDefaultRules', []);
       const rule = item.label.toString();
@@ -773,6 +784,7 @@ export function activate(context: vscode.ExtensionContext) {
       updateDecorations();
     }),
     
+    // Comando per attivare/disattivare le regole di memoria
     vscode.commands.registerCommand('copilotRules.toggleMemoryRule', (item: RuleItem) => {
       const selectedRules = context.globalState.get<string[]>('selectedMemoryRules', []);
       const rule = item.label.toString();
@@ -797,6 +809,7 @@ export function activate(context: vscode.ExtensionContext) {
       updateDecorations();
     }),
     
+    // Comando per abilitare le regole della memoria
     vscode.commands.registerCommand('copilotRules.enableMemoryRules', () => {
       rulesProvider.setMemoryRulesEnabled(true);
       // Aggiorna le regole nel file di configurazione di GitHub Copilot
@@ -804,6 +817,7 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('Regole della memoria abilitate.');
     }),
     
+    // Comando per aggiungere una regola di template
     vscode.commands.registerCommand('copilotRules.addTemplateRule', (item: RuleItem) => {
       const rule = item.label.toString();
       const personalRules = context.globalState.get<string>('personalRules', '');
@@ -815,18 +829,19 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage(`Regola "${rule}" aggiunta alle regole personali.`);
     }),
     
-    // Registra il comando per aprire l'editor visuale avanzato
+    // Comando per aprire l'editor visuale avanzato
     vscode.commands.registerCommand('copilotRules.openAdvancedRulesEditor', () => {
       openAdvancedRulesEditor(context, rulesProvider);
     }),
     
-    // Registra i comandi per creare e verificare il file delle regole
+    // Comando per creare il file delle regole
     vscode.commands.registerCommand('copilotRules.createRulesFile', () => {
       createRulesFile(context);
       // Aggiorna la visualizzazione
       rulesProvider.refresh();
     }),
     
+    // Comando per mostrare lo stato delle regole
     vscode.commands.registerCommand('copilotRules.showRulesFileStatus', () => {
       const { activeRules, inactiveRules } = readRulesFile();
       
@@ -897,177 +912,9 @@ export function activate(context: vscode.ExtensionContext) {
       
       // Imposta il contenuto HTML del webview
       panel.webview.html = html;
-    })
-  );
-  
-  // Registra il TreeDataProvider per la visualizzazione delle regole
-  vscode.window.registerTreeDataProvider('copilotRulesView', rulesProvider);
-  
-  // Aggiungi un pulsante "Inserisci regole selezionate" nella barra di stato
-  const insertRulesButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  insertRulesButton.text = "$(zap) Inserisci regole selezionate";
-  insertRulesButton.tooltip = "Inserisci le regole selezionate nel file di istruzioni di Copilot";
-  insertRulesButton.command = "copilotRules.insertSelectedRules";
-  insertRulesButton.show();
-  context.subscriptions.push(insertRulesButton);
-  
-  // Registra il comando per inserire le regole selezionate
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.insertSelectedRules', () => {
-      // Verifica che non ci siano regole duplicate
-      const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
-      const personalRulesText = context.globalState.get<string>('personalRules', '');
-      const personalRulesArray = personalRulesText.split(/\r?\n/).filter(r => r.trim().length > 0);
-      const memoryRulesEnabled = context.globalState.get<boolean>('enableMemoryRules', false);
-      const selectedMemoryRules = memoryRulesEnabled ? context.globalState.get<string[]>('selectedMemoryRules', []) : [];
-      
-      // Combina tutte le regole attive e rimuovi i duplicati
-      const allRulesSet = new Set([...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules]);
-      const allRules = Array.from(allRulesSet);
-      
-      // Se le regole sono cambiate, aggiorna lo stato
-      if (allRules.length !== [...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules].length) {
-        vscode.window.showInformationMessage(`Rimosse ${[...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules].length - allRules.length} regole duplicate.`);
-      }
-      
-      // Crea il file delle regole
-      createRulesFile(context);
-      
-      vscode.window.showInformationMessage(`${allRules.length} regole inserite con successo nel file di istruzioni di Copilot.`);
-    })
-  );
-  
-  // Registra il comando per attivare/disattivare le regole dei template
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.toggleTemplateRule', (item: RuleItem) => {
-      if (!item.templateLanguage) {
-        return;
-      }
-      
-      const rule = item.label.toString();
-      // Controlliamo se la regola è già nelle regole personali
-      const personalRulesText = context.globalState.get<string>('personalRules', '');
-      const personalRulesArray = personalRulesText.split(/\r?\n/).filter(r => r.trim().length > 0);
-      
-      if (personalRulesArray.includes(rule)) {
-        // Se la regola è già presente, rimuovila
-        const updatedRules = personalRulesArray.filter(r => r !== rule).join('\n');
-        context.globalState.update('personalRules', updatedRules);
-        vscode.window.showInformationMessage(`Regola "${rule.substring(0, 30)}..." rimossa dalle regole personali.`);
-      } else {
-        // Altrimenti, aggiungila
-        const updatedRules = personalRulesText ? personalRulesText + '\n' + rule : rule;
-        context.globalState.update('personalRules', updatedRules);
-        vscode.window.showInformationMessage(`Regola "${rule.substring(0, 30)}..." aggiunta alle regole personali.`);
-      }
-      
-      // Aggiorna le regole nel file di configurazione e l'interfaccia
-      updateCopilotRules(context);
-      rulesProvider.refresh();
-    })
-  );
-  
-  // Registra il comando per aprire l'editor visuale avanzato
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.openAdvancedRulesEditor', () => {
-      openAdvancedRulesEditor(context, rulesProvider);
-    })
-  );
-  
-  // Registra i comandi per creare e verificare il file delle regole
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.createRulesFile', () => {
-      createRulesFile(context);
-      // Aggiorna la visualizzazione
-      rulesProvider.refresh();
     }),
     
-    vscode.commands.registerCommand('copilotRules.showRulesFileStatus', () => {
-      const { activeRules, inactiveRules } = readRulesFile();
-      
-      if (activeRules.length === 0 && inactiveRules.length === 0) {
-        vscode.window.showInformationMessage('Il file delle regole non esiste o è vuoto. Usa il comando "Crea file delle regole" per crearlo.');
-        return;
-      }
-      
-      // Mostra un messaggio informativo con il numero di regole attive e inattive
-      vscode.window.showInformationMessage(
-        `Stato delle regole: ${activeRules.length} regole attive, ${inactiveRules.length} regole inattive.`
-      );
-      
-      // Crea un WebView per mostrare i dettagli sulle regole attive e inattive
-      const panel = vscode.window.createWebviewPanel(
-        'rulesStatus',
-        'Stato Regole',
-        vscode.ViewColumn.One,
-        { enableScripts: true }
-      );
-      
-      // Crea il contenuto HTML
-      let html = `
-        <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            h1 { color: #333; }
-            h2 { color: #007acc; margin-top: 20px; }
-            ul { padding-left: 20px; }
-            li { margin-bottom: 8px; }
-            .active { color: #008000; }
-            .inactive { color: #cc0000; }
-          </style>
-        </head>
-        <body>
-          <h1>Stato delle Regole</h1>
-      `;
-      
-      // Aggiungi regole attive
-      html += `<h2 class="active">Regole Attive (${activeRules.length})</h2>`;
-      if (activeRules.length > 0) {
-        html += '<ul>';
-        activeRules.forEach(rule => {
-          html += `<li>${rule}</li>`;
-        });
-        html += '</ul>';
-      } else {
-        html += '<p>Nessuna regola attiva trovata.</p>';
-      }
-      
-      // Aggiungi regole inattive
-      html += `<h2 class="inactive">Regole Inattive (${inactiveRules.length})</h2>`;
-      if (inactiveRules.length > 0) {
-        html += '<ul>';
-        inactiveRules.forEach(rule => {
-          html += `<li>${rule}</li>`;
-        });
-        html += '</ul>';
-      } else {
-        html += '<p>Nessuna regola inattiva trovata.</p>';
-      }
-      
-      html += `
-        </body>
-        </html>
-      `;
-      
-      // Imposta il contenuto HTML del webview
-      panel.webview.html = html;
-    })
-  );
-  
-  // Registra il TreeDataProvider per la visualizzazione delle regole
-  vscode.window.registerTreeDataProvider('copilotRulesView', rulesProvider);
-  
-  // Aggiungi un pulsante "Inserisci regole selezionate" nella barra di stato
-  const insertRulesButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  insertRulesButton.text = "$(zap) Inserisci regole selezionate";
-  insertRulesButton.tooltip = "Inserisci le regole selezionate nel file di istruzioni di Copilot";
-  insertRulesButton.command = "copilotRules.insertSelectedRules";
-  insertRulesButton.show();
-  context.subscriptions.push(insertRulesButton);
-  
-  // Registra il comando per inserire le regole selezionate
-  context.subscriptions.push(
+    // Comando per inserire le regole selezionate
     vscode.commands.registerCommand('copilotRules.insertSelectedRules', () => {
       // Verifica che non ci siano regole duplicate
       const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
@@ -1089,166 +936,9 @@ export function activate(context: vscode.ExtensionContext) {
       createRulesFile(context);
       
       vscode.window.showInformationMessage(`${allRules.length} regole inserite con successo nel file di istruzioni di Copilot.`);
-    })
-  );
-  
-  // Registra il comando per attivare/disattivare le regole dei template
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.toggleTemplateRule', (item: RuleItem) => {
-      if (!item.templateLanguage) {
-        return;
-      }
-      
-      const rule = item.label.toString();
-      // Controlliamo se la regola è già nelle regole personali
-      const personalRulesText = context.globalState.get<string>('personalRules', '');
-      const personalRulesArray = personalRulesText.split(/\r?\n/).filter(r => r.trim().length > 0);
-      
-      if (personalRulesArray.includes(rule)) {
-        // Se la regola è già presente, rimuovila
-        const updatedRules = personalRulesArray.filter(r => r !== rule).join('\n');
-        context.globalState.update('personalRules', updatedRules);
-        vscode.window.showInformationMessage(`Regola "${rule.substring(0, 30)}..." rimossa dalle regole personali.`);
-      } else {
-        // Altrimenti, aggiungila
-        const updatedRules = personalRulesText ? personalRulesText + '\n' + rule : rule;
-        context.globalState.update('personalRules', updatedRules);
-        vscode.window.showInformationMessage(`Regola "${rule.substring(0, 30)}..." aggiunta alle regole personali.`);
-      }
-      
-      // Aggiorna le regole nel file di configurazione e l'interfaccia
-      updateCopilotRules(context);
-      rulesProvider.refresh();
-    })
-  );
-  
-  // Registra il comando per aprire l'editor visuale avanzato
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.openAdvancedRulesEditor', () => {
-      openAdvancedRulesEditor(context, rulesProvider);
-    })
-  );
-  
-  // Registra i comandi per creare e verificare il file delle regole
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.createRulesFile', () => {
-      createRulesFile(context);
-      // Aggiorna la visualizzazione
-      rulesProvider.refresh();
     }),
     
-    vscode.commands.registerCommand('copilotRules.showRulesFileStatus', () => {
-      const { activeRules, inactiveRules } = readRulesFile();
-      
-      if (activeRules.length === 0 && inactiveRules.length === 0) {
-        vscode.window.showInformationMessage('Il file delle regole non esiste o è vuoto. Usa il comando "Crea file delle regole" per crearlo.');
-        return;
-      }
-      
-      // Mostra un messaggio informativo con il numero di regole attive e inattive
-      vscode.window.showInformationMessage(
-        `Stato delle regole: ${activeRules.length} regole attive, ${inactiveRules.length} regole inattive.`
-      );
-      
-      // Crea un WebView per mostrare i dettagli sulle regole attive e inattive
-      const panel = vscode.window.createWebviewPanel(
-        'rulesStatus',
-        'Stato Regole',
-        vscode.ViewColumn.One,
-        { enableScripts: true }
-      );
-      
-      // Crea il contenuto HTML
-      let html = `
-        <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            h1 { color: #333; }
-            h2 { color: #007acc; margin-top: 20px; }
-            ul { padding-left: 20px; }
-            li { margin-bottom: 8px; }
-            .active { color: #008000; }
-            .inactive { color: #cc0000; }
-          </style>
-        </head>
-        <body>
-          <h1>Stato delle Regole</h1>
-      `;
-      
-      // Aggiungi regole attive
-      html += `<h2 class="active">Regole Attive (${activeRules.length})</h2>`;
-      if (activeRules.length > 0) {
-        html += '<ul>';
-        activeRules.forEach(rule => {
-          html += `<li>${rule}</li>`;
-        });
-        html += '</ul>';
-      } else {
-        html += '<p>Nessuna regola attiva trovata.</p>';
-      }
-      
-      // Aggiungi regole inattive
-      html += `<h2 class="inactive">Regole Inattive (${inactiveRules.length})</h2>`;
-      if (inactiveRules.length > 0) {
-        html += '<ul>';
-        inactiveRules.forEach(rule => {
-          html += `<li>${rule}</li>`;
-        });
-        html += '</ul>';
-      } else {
-        html += '<p>Nessuna regola inattiva trovata.</p>';
-      }
-      
-      html += `
-        </body>
-        </html>
-      `;
-      
-      // Imposta il contenuto HTML del webview
-      panel.webview.html = html;
-    })
-  );
-  
-  // Registra il TreeDataProvider per la visualizzazione delle regole
-  vscode.window.registerTreeDataProvider('copilotRulesView', rulesProvider);
-  
-  // Aggiungi un pulsante "Inserisci regole selezionate" nella barra di stato
-  const insertRulesButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  insertRulesButton.text = "$(zap) Inserisci regole selezionate";
-  insertRulesButton.tooltip = "Inserisci le regole selezionate nel file di istruzioni di Copilot";
-  insertRulesButton.command = "copilotRules.insertSelectedRules";
-  insertRulesButton.show();
-  context.subscriptions.push(insertRulesButton);
-  
-  // Registra il comando per inserire le regole selezionate
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.insertSelectedRules', () => {
-      // Verifica che non ci siano regole duplicate
-      const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
-      const personalRulesText = context.globalState.get<string>('personalRules', '');
-      const personalRulesArray = personalRulesText.split(/\r?\n/).filter(r => r.trim().length > 0);
-      const memoryRulesEnabled = context.globalState.get<boolean>('enableMemoryRules', false);
-      const selectedMemoryRules = memoryRulesEnabled ? context.globalState.get<string[]>('selectedMemoryRules', []) : [];
-      
-      // Combina tutte le regole attive e rimuovi i duplicati
-      const allRulesSet = new Set([...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules]);
-      const allRules = Array.from(allRulesSet);
-      
-      // Se le regole sono cambiate, aggiorna lo stato
-      if (allRules.length !== [...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules].length) {
-        vscode.window.showInformationMessage(`Rimosse ${[...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules].length - allRules.length} regole duplicate.`);
-      }
-      
-      // Crea il file delle regole
-      createRulesFile(context);
-      
-      vscode.window.showInformationMessage(`${allRules.length} regole inserite con successo nel file di istruzioni di Copilot.`);
-    })
-  );
-  
-  // Registra il comando per attivare/disattivare le regole dei template
-  context.subscriptions.push(
+    // Comando per attivare/disattivare le regole dei template
     vscode.commands.registerCommand('copilotRules.toggleTemplateRule', (item: RuleItem) => {
       if (!item.templateLanguage) {
         return;
@@ -1277,160 +967,20 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
   
-  // Registra il comando per aprire l'editor visuale avanzato
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.openAdvancedRulesEditor', () => {
-      openAdvancedRulesEditor(context, rulesProvider);
-    })
-  );
+  // Gestisci cambiamenti all'editor attivo
+  vscode.window.onDidChangeActiveTextEditor(editor => {
+    activeEditor = editor;
+    if (editor) {
+      triggerUpdateDecorations();
+    }
+  }, null, context.subscriptions);
   
-  // Registra i comandi per creare e verificare il file delle regole
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.createRulesFile', () => {
-      createRulesFile(context);
-      // Aggiorna la visualizzazione
-      rulesProvider.refresh();
-    }),
-    
-    vscode.commands.registerCommand('copilotRules.showRulesFileStatus', () => {
-      const { activeRules, inactiveRules } = readRulesFile();
-      
-      if (activeRules.length === 0 && inactiveRules.length === 0) {
-        vscode.window.showInformationMessage('Il file delle regole non esiste o è vuoto. Usa il comando "Crea file delle regole" per crearlo.');
-        return;
-      }
-      
-      // Mostra un messaggio informativo con il numero di regole attive e inattive
-      vscode.window.showInformationMessage(
-        `Stato delle regole: ${activeRules.length} regole attive, ${inactiveRules.length} regole inattive.`
-      );
-      
-      // Crea un WebView per mostrare i dettagli sulle regole attive e inattive
-      const panel = vscode.window.createWebviewPanel(
-        'rulesStatus',
-        'Stato Regole',
-        vscode.ViewColumn.One,
-        { enableScripts: true }
-      );
-      
-      // Crea il contenuto HTML
-      let html = `
-        <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            h1 { color: #333; }
-            h2 { color: #007acc; margin-top: 20px; }
-            ul { padding-left: 20px; }
-            li { margin-bottom: 8px; }
-            .active { color: #008000; }
-            .inactive { color: #cc0000; }
-          </style>
-        </head>
-        <body>
-          <h1>Stato delle Regole</h1>
-      `;
-      
-      // Aggiungi regole attive
-      html += `<h2 class="active">Regole Attive (${activeRules.length})</h2>`;
-      if (activeRules.length > 0) {
-        html += '<ul>';
-        activeRules.forEach(rule => {
-          html += `<li>${rule}</li>`;
-        });
-        html += '</ul>';
-      } else {
-        html += '<p>Nessuna regola attiva trovata.</p>';
-      }
-      
-      // Aggiungi regole inattive
-      html += `<h2 class="inactive">Regole Inattive (${inactiveRules.length})</h2>`;
-      if (inactiveRules.length > 0) {
-        html += '<ul>';
-        inactiveRules.forEach(rule => {
-          html += `<li>${rule}</li>`;
-        });
-        html += '</ul>';
-      } else {
-        html += '<p>Nessuna regola inattiva trovata.</p>';
-      }
-      
-      html += `
-        </body>
-        </html>
-      `;
-      
-      // Imposta il contenuto HTML del webview
-      panel.webview.html = html;
-    })
-  );
-  
-  // Registra il TreeDataProvider per la visualizzazione delle regole
-  vscode.window.registerTreeDataProvider('copilotRulesView', rulesProvider);
-  
-  // Aggiungi un pulsante "Inserisci regole selezionate" nella barra di stato
-  const insertRulesButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  insertRulesButton.text = "$(zap) Inserisci regole selezionate";
-  insertRulesButton.tooltip = "Inserisci le regole selezionate nel file di istruzioni di Copilot";
-  insertRulesButton.command = "copilotRules.insertSelectedRules";
-  insertRulesButton.show();
-  context.subscriptions.push(insertRulesButton);
-  
-  // Registra il comando per inserire le regole selezionate
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.insertSelectedRules', () => {
-      // Verifica che non ci siano regole duplicate
-      const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
-      const personalRulesText = context.globalState.get<string>('personalRules', '');
-      const personalRulesArray = personalRulesText.split(/\r?\n/).filter(r => r.trim().length > 0);
-      const memoryRulesEnabled = context.globalState.get<boolean>('enableMemoryRules', false);
-      const selectedMemoryRules = memoryRulesEnabled ? context.globalState.get<string[]>('selectedMemoryRules', []) : [];
-      
-      // Combina tutte le regole attive e rimuovi i duplicati
-      const allRulesSet = new Set([...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules]);
-      const allRules = Array.from(allRulesSet);
-      
-      // Se le regole sono cambiate, aggiorna lo stato
-      if (allRules.length !== [...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules].length) {
-        vscode.window.showInformationMessage(`Rimosse ${[...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules].length - allRules.length} regole duplicate.`);
-      }
-      
-      // Crea il file delle regole
-      createRulesFile(context);
-      
-      vscode.window.showInformationMessage(`${allRules.length} regole inserite con successo nel file di istruzioni di Copilot.`);
-    })
-  );
-  
-  // Registra il comando per attivare/disattivare le regole dei template
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.toggleTemplateRule', (item: RuleItem) => {
-      if (!item.templateLanguage) {
-        return;
-      }
-      
-      const rule = item.label.toString();
-      // Controlliamo se la regola è già nelle regole personali
-      const personalRulesText = context.globalState.get<string>('personalRules', '');
-      const personalRulesArray = personalRulesText.split(/\r?\n/).filter(r => r.trim().length > 0);
-      
-      if (personalRulesArray.includes(rule)) {
-        // Se la regola è già presente, rimuovila
-        const updatedRules = personalRulesArray.filter(r => r !== rule).join('\n');
-        context.globalState.update('personalRules', updatedRules);
-        vscode.window.showInformationMessage(`Regola "${rule.substring(0, 30)}..." rimossa dalle regole personali.`);
-      } else {
-        // Altrimenti, aggiungila
-        const updatedRules = personalRulesText ? personalRulesText + '\n' + rule : rule;
-        context.globalState.update('personalRules', updatedRules);
-        vscode.window.showInformationMessage(`Regola "${rule.substring(0, 30)}..." aggiunta alle regole personali.`);
-      }
-      
-      // Aggiorna le regole nel file di configurazione e l'interfaccia
-      updateCopilotRules(context);
-      rulesProvider.refresh();
-    })
-  );
+  // Gestisci cambiamenti al contenuto del documento
+  vscode.workspace.onDidChangeTextDocument(event => {
+    if (activeEditor && event.document === activeEditor.document) {
+      triggerUpdateDecorations();
+    }
+  }, null, context.subscriptions);
 }
 
 export function deactivate() {}
