@@ -63,6 +63,73 @@ const languageTemplates: Record<string, string[]> = {
     'Configura variabili ambiente secondo principi di sicurezza.',
     'Sviluppa test automatizzati per ogni endpoint API.',
     'Centralizza gestione dipendenze con requirements.txt o equivalenti.'
+  ],
+  'Go': [
+    'Segui le convenzioni di naming delle variabili in camelCase o snake_case coerentemente.',
+    'Implementa gestione errori con verifica esplicita dei valori di ritorno.',
+    'Evita l\'uso di panic() in codice di produzione se non assolutamente necessario.',
+    'Documenta funzioni esportate con commenti in stile godoc.',
+    'Implementa test unitari per tutti i pacchetti pubblici.',
+    'Utilizza il sistema di moduli Go per gestire le dipendenze esterne.',
+    'Verifica possibili race conditions con il race detector.'
+  ],
+  'Rust': [
+    'Rispetta le convenzioni di naming Rust: snake_case per variabili e funzioni, PascalCase per tipi.',
+    'Utilizza il sistema di proprietà (ownership) e prestito (borrowing) in modo appropriato.',
+    'Evita l\'uso eccessivo di unsafe {} limitandolo solo a casi specifici ben documentati.',
+    'Sfrutta il pattern Result<T, E> per gestione errori anziché panic!.',
+    'Implementa i trait standard quando appropriato (Display, Debug, Clone, ecc.).',
+    'Gestisci correttamente i lifetime nelle strutture dati complesse.',
+    'Utilizza iteratori e funzioni di ordine superiore invece di loop espliciti quando possibile.'
+  ],
+  'PHP': [
+    'Segui gli standard PSR per formattazione e struttura del codice.',
+    'Implementa funzionalità orientate agli oggetti secondo principi SOLID.',
+    'Utilizza Composer per la gestione delle dipendenze esterne.',
+    'Evita query SQL dirette preferendo ORM o query builder con parametrizzazione.',
+    'Implementa validazione di tutti gli input utente lato server.',
+    'Configura gestione errori appropriata senza esporre dettagli tecnici agli utenti.',
+    'Documenta le classi e metodi pubblici con standard phpDocumentor.'
+  ],
+  'Swift': [
+    'Rispetta le convenzioni di naming Apple: camelCase per variabili e funzioni, PascalCase per tipi.',
+    'Utilizza opzionali in modo sicuro con if-let, guard-let o operatore di coalescenza.',
+    'Implementa il pattern delegate per gestire le comunicazioni tra componenti.',
+    'Sfrutta le estensioni per organizzare e separare la funzionalità.',
+    'Progetta la UI per adattarsi a diverse dimensioni di schermo con Auto Layout.',
+    'Preferisci struct rispetto a class quando non è necessaria la semantica di reference type.',
+    'Utilizza protocolli per definire interfacce e promuovere la componibilità.',
+    'Implementa la gestione degli errori con funzioni che lanciano eccezioni o restituiscono Result.'
+  ],
+  'Angular': [
+    'Struttura le applicazioni seguendo l\'architettura modulare consigliata.',
+    'Mantieni i componenti piccoli e con responsabilità singola.',
+    'Utilizza i servizi per condividere logica e stato tra componenti.',
+    'Implementa la lazy loading dei moduli per migliorare le performance iniziali.',
+    'Sfrutta RxJS per gestire flussi di dati e operazioni asincrone.',
+    'Stabilisci convenzioni di naming coerenti per componenti, servizi e moduli.',
+    'Applica OnPush change detection per migliorare le performance.',
+    'Scrivi test unitari per componenti e servizi con Jasmine/Karma.'
+  ],
+  'Vue.js': [
+    'Organizza i componenti secondo l\'architettura Single File Component (SFC).',
+    'Preferisci Composition API per componenti complessi per migliore riutilizzo della logica.',
+    'Mantieni i componenti piccoli e focalizzati su una singola funzionalità.',
+    'Utilizza Vuex o Pinia per gestione centralizzata dello stato.',
+    'Implementa routing con Vue Router per navigazione dichiarativa.',
+    'Nomina gli eventi con kebab-case e props/methods con camelCase.',
+    'Valida sempre le props in ingresso definendo tipi e constraint.',
+    'Scrivi test unitari con Vue Test Utils ed end-to-end con Cypress.'
+  ],
+  'Svelte': [
+    'Sfrutta la reattività integrata di Svelte con l\'operatore $:.',
+    'Organizza le applicazioni usando componenti Svelte singoli (.svelte).',
+    'Utilizza svelte/store per stato condiviso tra componenti.',
+    'Mantieni il codice imperativo al minimo grazie all\'approccio dichiarativo.',
+    'Sfrutta event forwarding per semplificare la comunicazione tra componenti nidificati.',
+    'Implementa transizioni e animazioni utilizzando le direttive integrate.',
+    'Segui le convenzioni di Svelte per nomenclatura di azioni, store e componenti.',
+    'Ottimizza le performance eliminando dipendenze esterne quando possibile.'
   ]
 };
 
@@ -72,6 +139,20 @@ interface RuleUsageStats {
   lastUsed: string;
   projects: string[];
   languages: string[];
+}
+
+// Interfaccia per le regole con tag
+interface TaggedRule {
+  text: string;
+  tags: string[];
+}
+
+// Interfaccia per le opzioni di filtro
+interface FilterOptions {
+  query: string;
+  tags: string[];
+  languages: string[];
+  usageCount?: {min: number, max: number};
 }
 
 class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
@@ -266,6 +347,67 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
           vscode.window.showInformationMessage('Statistiche di utilizzo azzerate con successo.');
         }
       });
+  }
+
+  // Filtra le regole in base alle opzioni specificate
+  filterRules(rules: string[], options: FilterOptions): string[] {
+    if (!options.query && (!options.tags || options.tags.length === 0) && 
+        (!options.languages || options.languages.length === 0) && !options.usageCount) {
+      return rules; // Se non ci sono filtri, restituisci tutte le regole
+    }
+
+    return rules.filter(rule => {
+      // Filtro per testo di ricerca
+      if (options.query && !rule.toLowerCase().includes(options.query.toLowerCase())) {
+        return false;
+      }
+      
+      // Filtro per tag (da implementare quando avremo regole con tag)
+      if (options.tags && options.tags.length > 0) {
+        // Esempio di implementazione: per ora controlliamo se la regola contiene uno dei tag
+        const hasMatchingTag = options.tags.some(tag => 
+          rule.toLowerCase().includes(tag.toLowerCase())
+        );
+        if (!hasMatchingTag) {
+          return false;
+        }
+      }
+      
+      // Filtro per linguaggio
+      if (options.languages && options.languages.length > 0) {
+        // Verifica le statistiche di utilizzo per vedere in quali linguaggi è stata usata la regola
+        const stats = this.getRuleUsageStats(rule);
+        if (!stats || !stats.languages || stats.languages.length === 0) {
+          return false;
+        }
+        
+        const hasMatchingLanguage = options.languages.some(lang => 
+          stats.languages.some(usedLang => usedLang.toLowerCase() === lang.toLowerCase())
+        );
+        if (!hasMatchingLanguage) {
+          return false;
+        }
+      }
+      
+      // Filtro per conteggio utilizzo
+      if (options.usageCount) {
+        const stats = this.getRuleUsageStats(rule);
+        if (!stats) {
+          return false;
+        }
+        
+        if (options.usageCount.min !== undefined && stats.count < options.usageCount.min) {
+          return false;
+        }
+        
+        if (options.usageCount.max !== undefined && stats.count > options.usageCount.max) {
+          return false;
+        }
+      }
+      
+      // Se supera tutti i filtri, includi la regola
+      return true;
+    });
   }
 }
 

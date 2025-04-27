@@ -7,7 +7,7 @@
 
 ## Funzionalità
 
-<img src="resources/activity-bar-icon.svg" alt="Icona Sidebar" width="16" height="16" align="left" style="margin-right: 8px"> **Gestione regole per GitHub Copilot**: seleziona, personalizza e inietta regole direttamente nel tuo progetto
+<img src="resources/activity-bar-icon.png" alt="Icona Sidebar" width="16" height="16" align="left" style="margin-right: 8px"> **Gestione regole per GitHub Copilot**: seleziona, personalizza e inietta regole direttamente nel tuo progetto
 
 - **Template per linguaggi/framework**: aggiungi facilmente regole predefinite per JavaScript, Python, TypeScript, React, Node.js, Django e Flask
 - **Editor visuale regole**: interfaccia drag and drop per riordinare, aggiungere e modificare le regole
@@ -26,7 +26,7 @@
 
 ### Sidebar
 
-<img src="resources/activity-bar-icon.svg" alt="Icona Sidebar" width="16" height="16" align="left" style="margin-right: 8px">
+<img src="resources/activity-bar-icon.png" alt="Icona Sidebar" width="16" height="16" align="left" style="margin-right: 8px">
 L'estensione aggiunge una sidebar nell'activity bar di VS Code con le seguenti sezioni:
 
 - **Regole di default (📚)**: regole generali consigliate per qualsiasi progetto
@@ -91,7 +91,7 @@ L'estensione salva tutte le regole selezionate nel file `.github/copilot-instruc
 ## Status Bar
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/microsoft/vscode-codicons/main/src/icons/copilot.svg" width="16" height="16" style="vertical-align: middle"> <strong>Regole Copilot: X</strong>
+  <strong>Regole Copilot: X</strong>
 </div>
 
 L'estensione aggiunge un indicatore nella barra di stato che mostra il numero totale di regole attive. Cliccando su questo indicatore si aprirà l'editor visuale delle regole.

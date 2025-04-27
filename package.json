@@ -6,6 +6,11 @@
   "engines": {
     "vscode": "^1.99.0"
   },
+  "publisher": "pietrondo",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pietrondo/copilot-memory-rules"
+  },
   "categories": [
     "Other"
   ],
@@ -25,7 +30,7 @@
     "onCommand:copilot-rules-injector.injectSelectedRules"
   ],
   "main": "./dist/extension.js",
-  "icon": "icon.svg",
+  "icon": "icon.png",
   "contributes": {
     "commands": [
       {

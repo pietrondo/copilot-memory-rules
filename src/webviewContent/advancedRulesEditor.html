@@ -597,10 +597,63 @@
         .shake {
             animation: shake 0.5s;
         }
+
+        /* Stili per il campo di ricerca e suggerimenti */
+        .search-container {
+            position: relative;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            border-radius: 4px;
+            border: 1px solid var(--vscode-input-border);
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+        }
+        
+        .search-suggestions {
+            position: absolute;
+            width: 100%;
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: var(--vscode-dropdown-background);
+            border: 1px solid var(--vscode-dropdown-border);
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            z-index: 100;
+            display: none;
+        }
+        
+        .search-suggestion {
+            padding: 8px 10px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        
+        .search-suggestion:hover {
+            background-color: var(--vscode-list-hoverBackground);
+        }
+        
+        .search-suggestion .highlight {
+            color: var(--vscode-textLink-foreground);
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
     <h1>Editor Avanzato Regole Copilot</h1>
+
+    <!-- Aggiunta di un campo di ricerca con funzionalità di auto-completamento -->
+    <div class="search-container">
+        <input type="text" id="rule-search" placeholder="Cerca regole..." class="search-input">
+        <div id="search-suggestions" class="search-suggestions">
+            <!-- I suggerimenti verranno generati dinamicamente -->
+        </div>
+    </div>
     
     <!-- Tabs Navigation -->
     <div class="tabs">
@@ -758,6 +811,8 @@
             const usageChart = document.getElementById('usage-chart');
             const languagesChart = document.getElementById('languages-chart');
             const projectsChart = document.getElementById('projects-chart');
+            const ruleSearchInput = document.getElementById('rule-search');
+            const searchSuggestionsContainer = document.getElementById('search-suggestions');
 
             // Inizializza l'applicazione
             init();
@@ -834,6 +889,36 @@
                         setTimeout(() => {
                             personalRulesDropzone.classList.remove('pulse');
                         }, 1000);
+                    }
+                });
+
+                // Funzionalità di ricerca con auto-completamento
+                ruleSearchInput.addEventListener('input', () => {
+                    const query = ruleSearchInput.value.toLowerCase();
+                    searchSuggestionsContainer.innerHTML = '';
+                    if (query) {
+                        const allRules = [...state.defaultRules, ...state.memoryRules, ...state.personalRules];
+                        const filteredRules = allRules.filter(rule => rule.toLowerCase().includes(query));
+                        filteredRules.forEach(rule => {
+                            const suggestion = document.createElement('div');
+                            suggestion.className = 'search-suggestion';
+                            suggestion.textContent = rule;
+                            suggestion.addEventListener('click', () => {
+                                addRuleToPersonal(rule);
+                                ruleSearchInput.value = '';
+                                searchSuggestionsContainer.innerHTML = '';
+                            });
+                            searchSuggestionsContainer.appendChild(suggestion);
+                        });
+                        searchSuggestionsContainer.style.display = 'block';
+                    } else {
+                        searchSuggestionsContainer.style.display = 'none';
+                    }
+                });
+
+                document.addEventListener('click', (event) => {
+                    if (!ruleSearchInput.contains(event.target) && !searchSuggestionsContainer.contains(event.target)) {
+                        searchSuggestionsContainer.style.display = 'none';
                     }
                 });
             }
