@@ -15,6 +15,7 @@
     "onCommand:copilot-rules-injector.helloWorld"
   ],
   "main": "./dist/extension.js",
+  "icon": "icon.svg",
   "contributes": {
     "commands": [
       {
@@ -28,8 +29,37 @@
       {
         "command": "copilot-rules-injector.createStandardCopilotRules",
         "title": "Crea Copilot Rules Standard (Best Practice)"
+      },
+      {
+        "command": "copilot-rules-injector.toggleMemoryRule",
+        "title": "Seleziona/Deseleziona regola memoria"
+      },
+      {
+        "command": "copilot-rules-injector.enableMemoryRules",
+        "title": "Abilita regole della memoria"
+      },
+      {
+        "command": "copilot-rules-injector.createMemoryFiles",
+        "title": "Crea/aggiorna README.md e STATUS.md"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "copilotRulesActivityBar",
+          "title": "Copilot Rules",
+          "icon": "icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "copilotRulesActivityBar": [
+        {
+          "id": "copilotRulesView",
+          "name": "Copilot Rules"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
