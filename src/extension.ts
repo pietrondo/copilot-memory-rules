@@ -272,7 +272,9 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
         new RuleItem('Regole di default', vscode.TreeItemCollapsibleState.Expanded, 'default', false, false, false, false, false, undefined, selectedDefaultRules.length),
         new RuleItem('Regole personali', vscode.TreeItemCollapsibleState.Expanded, 'personal', false, false, false, false, false, undefined, personalRules.length),
         new RuleItem('Regole della memoria', vscode.TreeItemCollapsibleState.Expanded, 'memory', false, false, false, false, false, undefined, memoryRulesEnabled ? selectedMemoryRules.length : 0),
-        new RuleItem('Template di regole', vscode.TreeItemCollapsibleState.Expanded, 'template')
+        new RuleItem('Template di regole', vscode.TreeItemCollapsibleState.Expanded, 'template'),
+        new RuleItem('Crea file delle regole', vscode.TreeItemCollapsibleState.None, 'createRulesFileButton'),
+        new RuleItem('Verifica regole attive', vscode.TreeItemCollapsibleState.None, 'showRulesFileStatusButton')
       ]);
     }
     if (element && element.type === 'template') {
@@ -541,6 +543,26 @@ class RuleItem extends vscode.TreeItem {
         arguments: []
       };
     }
+    
+    if (type === 'createRulesFileButton') {
+      this.iconPath = new vscode.ThemeIcon('new-file');
+      this.command = {
+        title: 'Crea file delle regole',
+        command: 'copilotRules.createRulesFile',
+        arguments: []
+      };
+      this.tooltip = 'Crea un file delle regole nella cartella regole';
+    }
+    
+    if (type === 'showRulesFileStatusButton') {
+      this.iconPath = new vscode.ThemeIcon('info');
+      this.command = {
+        title: 'Mostra stato delle regole',
+        command: 'copilotRules.showRulesFileStatus',
+        arguments: []
+      };
+      this.tooltip = 'Mostra quali regole sono attive nel file delle regole';
+    }
   }
 }
 
@@ -795,6 +817,85 @@ export function activate(context: vscode.ExtensionContext) {
     // Registra il comando per aprire l'editor visuale avanzato
     vscode.commands.registerCommand('copilotRules.openAdvancedRulesEditor', () => {
       openAdvancedRulesEditor(context, rulesProvider);
+    }),
+    
+    // Registra i comandi per creare e verificare il file delle regole
+    vscode.commands.registerCommand('copilotRules.createRulesFile', () => {
+      createRulesFile(context);
+      // Aggiorna la visualizzazione
+      rulesProvider.refresh();
+    }),
+    
+    vscode.commands.registerCommand('copilotRules.showRulesFileStatus', () => {
+      const { activeRules, inactiveRules } = readRulesFile();
+      
+      if (activeRules.length === 0 && inactiveRules.length === 0) {
+        vscode.window.showInformationMessage('Il file delle regole non esiste o è vuoto. Usa il comando "Crea file delle regole" per crearlo.');
+        return;
+      }
+      
+      // Mostra un messaggio informativo con il numero di regole attive e inattive
+      vscode.window.showInformationMessage(
+        `Stato delle regole: ${activeRules.length} regole attive, ${inactiveRules.length} regole inattive.`
+      );
+      
+      // Crea un WebView per mostrare i dettagli sulle regole attive e inattive
+      const panel = vscode.window.createWebviewPanel(
+        'rulesStatus',
+        'Stato Regole',
+        vscode.ViewColumn.One,
+        { enableScripts: true }
+      );
+      
+      // Crea il contenuto HTML
+      let html = `
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { color: #333; }
+            h2 { color: #007acc; margin-top: 20px; }
+            ul { padding-left: 20px; }
+            li { margin-bottom: 8px; }
+            .active { color: #008000; }
+            .inactive { color: #cc0000; }
+          </style>
+        </head>
+        <body>
+          <h1>Stato delle Regole</h1>
+      `;
+      
+      // Aggiungi regole attive
+      html += `<h2 class="active">Regole Attive (${activeRules.length})</h2>`;
+      if (activeRules.length > 0) {
+        html += '<ul>';
+        activeRules.forEach(rule => {
+          html += `<li>${rule}</li>`;
+        });
+        html += '</ul>';
+      } else {
+        html += '<p>Nessuna regola attiva trovata.</p>';
+      }
+      
+      // Aggiungi regole inattive
+      html += `<h2 class="inactive">Regole Inattive (${inactiveRules.length})</h2>`;
+      if (inactiveRules.length > 0) {
+        html += '<ul>';
+        inactiveRules.forEach(rule => {
+          html += `<li>${rule}</li>`;
+        });
+        html += '</ul>';
+      } else {
+        html += '<p>Nessuna regola inattiva trovata.</p>';
+      }
+      
+      html += `
+        </body>
+        </html>
+      `;
+      
+      // Imposta il contenuto HTML del webview
+      panel.webview.html = html;
     })
   );
   
@@ -820,6 +921,100 @@ export function activate(context: vscode.ExtensionContext) {
 // Funzione utility per fare l'escape dei caratteri speciali nelle regex
 function escapeRegExp(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function createRulesFile(context: vscode.ExtensionContext): void {
+  try {
+    // Get user's home directory
+    const homedir = os.homedir();
+    
+    // Create regole (rules) directory if it doesn't exist
+    const regoleDir = path.join(homedir, 'regole');
+    if (!fs.existsSync(regoleDir)) {
+      fs.mkdirSync(regoleDir);
+      console.log(`Directory 'regole' creata con successo in: ${regoleDir}`);
+    }
+    
+    // Create rules file if it doesn't exist
+    const regoleFilePath = path.join(regoleDir, 'regole.json');
+    if (!fs.existsSync(regoleFilePath)) {
+      // Get currently active rules
+      const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
+      const personalRulesText = context.globalState.get<string>('personalRules', '');
+      const personalRulesArray = personalRulesText.split(/\r?\n/).filter(r => r.trim().length > 0);
+      const memoryRulesEnabled = context.globalState.get<boolean>('enableMemoryRules', false);
+      const selectedMemoryRules = memoryRulesEnabled ? context.globalState.get<string[]>('selectedMemoryRules', []) : [];
+      
+      // Combine all active rules
+      const allRules = [...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules];
+      
+      // Create JSON object with active rules
+      const rulesObject = {
+        version: 1,
+        rules: allRules.map(rule => ({
+          text: rule,
+          active: true
+        }))
+      };
+      
+      // Write JSON file
+      fs.writeFileSync(regoleFilePath, JSON.stringify(rulesObject, null, 2));
+      console.log(`File 'regole.json' creato con successo in: ${regoleFilePath}`);
+      vscode.window.showInformationMessage(`File delle regole creato con successo in: ${regoleFilePath}`);
+    } else {
+      vscode.window.showInformationMessage(`Il file delle regole esiste già in: ${regoleFilePath}`);
+    }
+    
+    // Open the file in the editor
+    vscode.workspace.openTextDocument(regoleFilePath).then(doc => {
+      vscode.window.showTextDocument(doc);
+    });
+    
+  } catch (error) {
+    console.error('Errore durante la creazione del file delle regole:', error);
+    vscode.window.showErrorMessage(`Errore durante la creazione del file delle regole: ${error}`);
+  }
+}
+
+// Read rules file and determine which rules are active
+export function readRulesFile(): { activeRules: string[], inactiveRules: string[] } {
+  try {
+    // Get user's home directory
+    const homedir = os.homedir();
+    
+    // Path to rules file
+    const regoleFilePath = path.join(homedir, 'regole', 'regole.json');
+    
+    // Check if the file exists
+    if (fs.existsSync(regoleFilePath)) {
+      // Read and parse the file
+      const fileContent = fs.readFileSync(regoleFilePath, 'utf8');
+      const rulesObject = JSON.parse(fileContent);
+      
+      // Extract active and inactive rules
+      const activeRules: string[] = [];
+      const inactiveRules: string[] = [];
+      
+      if (rulesObject.rules && Array.isArray(rulesObject.rules)) {
+        rulesObject.rules.forEach((rule: { text: string, active: boolean }) => {
+          if (rule.active) {
+            activeRules.push(rule.text);
+          } else {
+            inactiveRules.push(rule.text);
+          }
+        });
+      }
+      
+      console.log(`Regole attive: ${activeRules.length}, Regole inattive: ${inactiveRules.length}`);
+      return { activeRules, inactiveRules };
+    }
+  } catch (error) {
+    console.error('Errore durante la lettura del file delle regole:', error);
+    vscode.window.showErrorMessage(`Errore durante la lettura del file delle regole: ${error}`);
+  }
+  
+  // Return empty arrays if file doesn't exist or there's an error
+  return { activeRules: [], inactiveRules: [] };
 }
 
 export function deactivate() {}

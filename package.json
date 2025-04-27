@@ -2,7 +2,7 @@
   "name": "copilot-rules-injector",
   "displayName": "Copilot Rules Injector",
   "description": "Estensione VS Code per inserire regole Copilot predefinite in markdown nei nuovi progetti",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.99.0"
   },
@@ -16,59 +16,39 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:copilot-rules-injector.createCopilotRules",
-    "onCommand:copilot-rules-injector.createStandardCopilotRules",
-    "onCommand:copilot-rules-injector.helloWorld",
-    "onCommand:copilot-rules-injector.toggleMemoryRule",
-    "onCommand:copilot-rules-injector.enableMemoryRules",
-    "onCommand:copilot-rules-injector.createMemoryFiles",
-    "onCommand:copilot-rules-injector.disableMemoryRules",
-    "onCommand:copilot-rules-injector.addTemplateRules",
-    "onCommand:copilot-rules-injector.exportRules",
-    "onCommand:copilot-rules-injector.importRules",
-    "onCommand:copilot-rules-injector.openRulesEditor",
-    "onCommand:copilot-rules-injector.suggestRules",
-    "onCommand:copilot-rules-injector.injectSelectedRules"
+    "onView:copilotRulesView"
   ],
   "main": "./dist/extension.js",
   "icon": "icon.png",
   "contributes": {
     "commands": [
       {
-        "command": "copilot-rules-injector.helloWorld",
-        "title": "Hello World"
+        "command": "copilotRules.toggleDefaultRule",
+        "title": "Attiva/Disattiva Regola Default"
       },
       {
-        "command": "copilot-rules-injector.createCopilotRules",
-        "title": "Crea/aggiorna Copilot Rules (Markdown)"
+        "command": "copilotRules.toggleMemoryRule",
+        "title": "Attiva/Disattiva Regola Memoria"
       },
       {
-        "command": "copilot-rules-injector.createStandardCopilotRules",
-        "title": "Crea Copilot Rules Standard (Best Practice)"
+        "command": "copilotRules.enableMemoryRules",
+        "title": "Abilita Regole della Memoria"
       },
       {
-        "command": "copilot-rules-injector.toggleMemoryRule",
-        "title": "Seleziona/Deseleziona regola memoria"
+        "command": "copilotRules.addTemplateRule",
+        "title": "Aggiungi Regola Template"
       },
       {
-        "command": "copilot-rules-injector.enableMemoryRules",
-        "title": "Abilita regole della memoria"
+        "command": "copilotRules.openAdvancedRulesEditor",
+        "title": "Apri Editor Visuale Regole"
       },
       {
-        "command": "copilot-rules-injector.createMemoryFiles",
-        "title": "Crea/aggiorna README.md e STATUS.md"
+        "command": "copilotRules.createRulesFile",
+        "title": "Crea File delle Regole"
       },
       {
-        "command": "copilot-rules-injector.disableMemoryRules",
-        "title": "Disabilita regole della memoria"
-      },
-      {
-        "command": "copilot-rules-injector.addSingleTemplateRule",
-        "title": "Aggiungi regola template"
-      },
-      {
-        "command": "copilot-rules-injector.openRulesEditor",
-        "title": "Apri editor visuale regole"
+        "command": "copilotRules.showRulesFileStatus",
+        "title": "Verifica Regole Attive"
       }
     ],
     "viewsContainers": {
