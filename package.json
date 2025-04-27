@@ -12,7 +12,17 @@
   "activationEvents": [
     "onCommand:copilot-rules-injector.createCopilotRules",
     "onCommand:copilot-rules-injector.createStandardCopilotRules",
-    "onCommand:copilot-rules-injector.helloWorld"
+    "onCommand:copilot-rules-injector.helloWorld",
+    "onCommand:copilot-rules-injector.toggleMemoryRule",
+    "onCommand:copilot-rules-injector.enableMemoryRules",
+    "onCommand:copilot-rules-injector.createMemoryFiles",
+    "onCommand:copilot-rules-injector.disableMemoryRules",
+    "onCommand:copilot-rules-injector.addTemplateRules",
+    "onCommand:copilot-rules-injector.exportRules",
+    "onCommand:copilot-rules-injector.importRules",
+    "onCommand:copilot-rules-injector.openRulesEditor",
+    "onCommand:copilot-rules-injector.suggestRules",
+    "onCommand:copilot-rules-injector.injectSelectedRules"
   ],
   "main": "./dist/extension.js",
   "icon": "icon.svg",
@@ -41,6 +51,18 @@
       {
         "command": "copilot-rules-injector.createMemoryFiles",
         "title": "Crea/aggiorna README.md e STATUS.md"
+      },
+      {
+        "command": "copilot-rules-injector.disableMemoryRules",
+        "title": "Disabilita regole della memoria"
+      },
+      {
+        "command": "copilot-rules-injector.addSingleTemplateRule",
+        "title": "Aggiungi regola template"
+      },
+      {
+        "command": "copilot-rules-injector.openRulesEditor",
+        "title": "Apri editor visuale regole"
       }
     ],
     "viewsContainers": {
