@@ -2,7 +2,7 @@
   "name": "copilot-rules-injector",
   "displayName": "Copilot Rules Injector",
   "description": "Estensione VS Code per inserire regole Copilot predefinite in markdown nei nuovi progetti",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.99.0"
   },
@@ -15,6 +15,7 @@
     "Other"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:copilot-rules-injector.createCopilotRules",
     "onCommand:copilot-rules-injector.createStandardCopilotRules",
     "onCommand:copilot-rules-injector.helloWorld",
@@ -75,7 +76,7 @@
         {
           "id": "copilotRulesActivityBar",
           "title": "Copilot Rules",
-          "icon": "resources/activity-bar-icon.svg"
+          "icon": "resources/activity-bar-icon.png"
         }
       ]
     },

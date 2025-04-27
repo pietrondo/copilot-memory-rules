@@ -2,6 +2,8 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
 
 // Template di regole per linguaggi/framework (deve essere dichiarato PRIMA della classe CopilotRulesProvider)
 const languageTemplates: Record<string, string[]> = {
@@ -132,6 +134,67 @@ const languageTemplates: Record<string, string[]> = {
     'Ottimizza le performance eliminando dipendenze esterne quando possibile.'
   ]
 };
+
+// Funzione per ottenere il percorso della directory dei file di configurazione di GitHub Copilot
+function getCopilotConfigPath(): string {
+  const homedir = os.homedir();
+  return path.join(homedir, '.github', 'copilot');
+}
+
+// Funzione per creare la directory dei file di configurazione di GitHub Copilot se non esiste
+function ensureCopilotConfigDirectory(): string {
+  const configPath = getCopilotConfigPath();
+  
+  // Verifica se esiste la directory .github
+  const githubDirPath = path.join(os.homedir(), '.github');
+  if (!fs.existsSync(githubDirPath)) {
+    fs.mkdirSync(githubDirPath);
+  }
+  
+  // Verifica se esiste la directory copilot
+  if (!fs.existsSync(configPath)) {
+    fs.mkdirSync(configPath);
+  }
+  
+  return configPath;
+}
+
+// Funzione per scrivere le regole nel file di configurazione di GitHub Copilot
+function writeRulesToCopilotConfig(rules: string[]): void {
+  try {
+    const configPath = ensureCopilotConfigDirectory();
+    const rulesPath = path.join(configPath, 'rules.json');
+    
+    // Crea l'oggetto JSON delle regole
+    const rulesObject = {
+      version: 1,
+      rules: rules
+    };
+    
+    // Scrivi il file JSON
+    fs.writeFileSync(rulesPath, JSON.stringify(rulesObject, null, 2));
+    
+    console.log(`Regole Copilot scritte con successo in: ${rulesPath}`);
+  } catch (error) {
+    console.error('Errore durante la scrittura del file di regole Copilot:', error);
+    vscode.window.showErrorMessage(`Errore durante la scrittura delle regole Copilot: ${error}`);
+  }
+}
+
+// Funzione per aggiornare le regole di GitHub Copilot con quelle selezionate nell'estensione
+function updateCopilotRules(context: vscode.ExtensionContext): void {
+  const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
+  const personalRulesText = context.globalState.get<string>('personalRules', '');
+  const personalRulesArray = personalRulesText.split(/\r?\n/).filter(r => r.trim().length > 0);
+  const memoryRulesEnabled = context.globalState.get<boolean>('enableMemoryRules', false);
+  const selectedMemoryRules = memoryRulesEnabled ? context.globalState.get<string[]>('selectedMemoryRules', []) : [];
+  
+  // Combina tutte le regole attive
+  const allRules = [...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules];
+  
+  // Scrivi le regole nel file di configurazione
+  writeRulesToCopilotConfig(allRules);
+}
 
 // Interfaccia per le statistiche di utilizzo delle regole
 interface RuleUsageStats {
@@ -550,6 +613,9 @@ export function activate(context: vscode.ExtensionContext) {
   // Inizializza il fornitore di regole
   const rulesProvider = new CopilotRulesProvider(context);
   
+  // Crea la directory e il file delle regole Copilot all'avvio dell'estensione
+  updateCopilotRules(context);
+  
   // Variabili per tenere traccia dello stato del decoratore
   let decorationTimeout: NodeJS.Timeout | undefined = undefined;
   let activeEditor = vscode.window.activeTextEditor;
@@ -678,6 +744,8 @@ export function activate(context: vscode.ExtensionContext) {
       }
       
       context.globalState.update('selectedDefaultRules', selectedRules);
+      // Aggiorna le regole nel file di configurazione di GitHub Copilot
+      updateCopilotRules(context);
       rulesProvider.refresh();
       updateDecorations();
     }),
@@ -700,12 +768,16 @@ export function activate(context: vscode.ExtensionContext) {
       }
       
       context.globalState.update('selectedMemoryRules', selectedRules);
+      // Aggiorna le regole nel file di configurazione di GitHub Copilot
+      updateCopilotRules(context);
       rulesProvider.refresh();
       updateDecorations();
     }),
     
     vscode.commands.registerCommand('copilotRules.enableMemoryRules', () => {
       rulesProvider.setMemoryRulesEnabled(true);
+      // Aggiorna le regole nel file di configurazione di GitHub Copilot
+      updateCopilotRules(context);
       vscode.window.showInformationMessage('Regole della memoria abilitate.');
     }),
     
@@ -714,6 +786,8 @@ export function activate(context: vscode.ExtensionContext) {
       const personalRules = context.globalState.get<string>('personalRules', '');
       const updatedRules = personalRules ? personalRules + '\n' + rule : rule;
       context.globalState.update('personalRules', updatedRules);
+      // Aggiorna le regole nel file di configurazione di GitHub Copilot
+      updateCopilotRules(context);
       rulesProvider.refresh();
       vscode.window.showInformationMessage(`Regola "${rule}" aggiunta alle regole personali.`);
     }),
