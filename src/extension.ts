@@ -5,63 +5,63 @@ import * as vscode from 'vscode';
 // Template di regole per linguaggi/framework (deve essere dichiarato PRIMA della classe CopilotRulesProvider)
 const languageTemplates: Record<string, string[]> = {
   'JavaScript': [
-    'Usa sempre let/const invece di var.',
-    'Segui la convenzione camelCase per nomi di variabili e funzioni.',
-    'Aggiungi JSDoc ai metodi pubblici.',
-    'Evita callback annidate, preferisci async/await o Promises.',
-    'Non lasciare mai console.log nel codice di produzione.'
+    'Implementa variabili con const e let, evitando var.',
+    'Mantieni nomenclatura camelCase per variabili e funzioni.',
+    'Documenta funzioni pubbliche con commenti esplicativi.',
+    'Preferisci async/await o Promises rispetto a callback nidificate.',
+    'Rimuovi eventuali dichiarazioni console.log prima della distribuzione.'
   ],
   'Python': [
-    'Segui la convenzione PEP8 per nomi e stile.',
-    'Usa docstring per funzioni e classi.',
-    'Evita import wildcard (from module import *).',
-    'Gestisci le eccezioni in modo esplicito.',
-    'Usa type hinting dove possibile.'
+    'Aderisci alle convenzioni stilistiche dello standard PEP8.',
+    'Incorpora docstring per tutti gli elementi di codice significativi.',
+    'Specifica importazioni precise anziché generiche con asterisco.',
+    'Implementa gestione esplicita delle eccezioni con blocchi try/except.',
+    'Utilizza annotazioni di tipo quando possibile per migliorare la comprensione.'
   ],
   'TypeScript': [
-    'Tipizza sempre parametri e ritorni delle funzioni.',
-    'Evita l’uso di any se non strettamente necessario.',
-    'Usa interfacce per strutturare i dati.',
-    'Preferisci const per variabili che non cambiano.',
-    'Aggiungi commenti per spiegare tipi complessi.'
+    'Definisci tipizzazioni esplicite per parametri e valori restituiti.',
+    'Limita l\'uso del tipo any ai casi di effettiva necessità.',
+    'Struttura i dati attraverso interfacce ben definite.',
+    'Utilizza const per dichiarazioni che non necessitano di riassegnazione.',
+    'Aggiungi note esplicative per costrutti di tipo complessi.'
   ],
   'React': [
-    'Usa PascalCase per i nomi dei componenti (es: MyComponent).',
-    'Ogni componente deve avere una sola responsabilità (Single Responsibility Principle).',
-    'Estrai la logica riutilizzabile in custom hook.',
-    'Usa CSS Modules per lo stile, posizionando il file nella stessa cartella del componente.',
-    'Tutti i componenti devono avere test che ne verifichino il rendering corretto.',
-    'Evita componenti troppo grandi: suddividili in componenti più piccoli.',
-    'Usa PropTypes o TypeScript per tipizzare le props.',
-    'Non lasciare codice morto o non usato nei componenti.'
+    'Denomina i componenti utilizzando PascalCase (es: ComponentName).',
+    'Progetta componenti con responsabilità singola e ben definita.',
+    'Isola la logica riutilizzabile implementando hook personalizzati.',
+    'Applica CSS Modules mantenendo i file di stile vicini ai componenti correlati.',
+    'Verifica il corretto rendering dei componenti attraverso test dedicati.',
+    'Decomponi componenti complessi in unità più semplici e gestibili.',
+    'Definisci tipi di props con PropTypes o integrazione TypeScript.',
+    'Elimina sistematicamente codice non utilizzato dai componenti.'
   ],
   'Node.js': [
-    'Usa sempre const/let invece di var.',
-    'Gestisci gli errori in modo esplicito (try/catch o callback err).',
-    'Non esporre mai dati sensibili nei log.',
-    'Organizza il codice in moduli chiari e riutilizzabili.',
-    'Usa async/await per la gestione delle operazioni asincrone.',
-    'Valida sempre l’input dell’utente.',
-    'Documenta le API con JSDoc o strumenti simili.'
+    'Implementa variabili con const/let, mai con var.',
+    'Gestisci errori esplicitamente nei blocchi try/catch o callback.',
+    'Proteggi informazioni sensibili evitando esposizione nei log.',
+    'Organizza il codice in moduli con responsabilità ben definite.',
+    'Implementa gestione asincrona utilizzando costrutti async/await.',
+    'Convalida input utente prima di qualsiasi elaborazione.',
+    'Documenta interfacce API con annotazioni chiare e complete.'
   ],
   'Django': [
-    'Segui la convenzione PEP8 per nomi e stile.',
-    'Usa i modelli Django per la gestione dei dati.',
-    'Non scrivere logica di business nelle view, usa i servizi.',
-    'Proteggi le view con decoratori di autenticazione/autorizzazione.',
-    'Usa i form Django per la validazione dell’input.',
-    'Scrivi test per ogni view e modello.',
-    'Configura correttamente le impostazioni di sicurezza (SECRET_KEY, DEBUG, ALLOWED_HOSTS, ecc.).'
+    'Implementa lo standard PEP8 per nomenclatura e stilistica.',
+    'Utilizza il sistema ORM nativo per interazioni con il database.',
+    'Isola logica business in servizi separati dalle view.',
+    'Applica decoratori di sicurezza per controllo accessi alle view.',
+    'Implementa form Django per validazione e sanitizzazione input.',
+    'Crea test unitari per ogni componente view e modello.',
+    'Configura parametri di sicurezza critici secondo best practice.'
   ],
   'Flask': [
-    'Segui la convenzione PEP8 per nomi e stile.',
-    'Usa blueprint per organizzare le route.',
-    'Non scrivere logica di business nelle view, usa servizi o moduli separati.',
-    'Valida sempre l’input dell’utente.',
-    'Gestisci le eccezioni e mostra messaggi di errore chiari.',
-    'Configura correttamente le variabili di ambiente e le chiavi segrete.',
-    'Scrivi test per ogni endpoint e funzionalità.',
-    'Usa requirements.txt per gestire le dipendenze.'
+    'Segui standard PEP8 per struttura e nomenclatura.',
+    'Implementa blueprint per l\'organizzazione modulare delle route.',
+    'Isola logica applicativa in servizi separati dalle funzioni view.',
+    'Implementa validazione rigorosa per tutti gli input esterni.',
+    'Gestisci eccezioni con messaggi informativi ma sicuri.',
+    'Configura variabili ambiente secondo principi di sicurezza.',
+    'Sviluppa test automatizzati per ogni endpoint API.',
+    'Centralizza gestione dipendenze con requirements.txt o equivalenti.'
   ]
 };
 
@@ -71,22 +71,22 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
 
   private context: vscode.ExtensionContext;
   public defaultRules: string[] = [
-    'Fornisci sempre un contesto ad alto livello all’inizio del file o della funzione.',
-    'Scrivi istruzioni dettagliate e specifiche nei commenti per guidare Copilot.',
-    'Usa nomi di variabili e funzioni chiari e descrittivi.',
-    'Segui le convenzioni di stile e le best practice del linguaggio.',
-    'Aggiungi esempi di input/output o casi d’uso nei commenti quando utile.',
-    'Preferisci soluzioni semplici, sicure e facilmente manutenibili.',
-    'Se il codice è complesso, aggiungi spiegazioni dettagliate nei commenti.',
-    'Non proporre codice che includa dati sensibili o credenziali.',
-    'Itera e affina le istruzioni in base ai risultati ottenuti.',
-    'Documenta e condividi le istruzioni efficaci con il team.'
+    'Definisci il contesto generale all\'inizio di ogni modulo o funzione per facilitare la comprensione.',
+    'Inserisci direttive specifiche nei commenti per orientare correttamente il comportamento di Copilot.',
+    'Adotta nomenclatura esplicativa e semanticamente rilevante per variabili e funzioni.',
+    'Rispetta le convenzioni stilistiche e le pratiche consigliate del linguaggio in uso.',
+    'Incorpora esempi concreti di utilizzo o casi di test nei commenti quando appropriato.',
+    'Privilegia soluzioni essenziali, robuste e di facile manutenzione nella struttura del codice.',
+    'Per implementazioni complesse, fornisci documentazione dettagliata nei commenti esplicativi.',
+    'Evita di generare codice contenente dati sensibili, credenziali o informazioni riservate.',
+    'Perfeziona progressivamente le indicazioni in base ai risultati generati.',
+    'Condividi con il gruppo di lavoro le direttive che si sono dimostrate particolarmente efficaci.'
   ];
   public memoryRules: string[] = [
-    'Crea e mantieni un file README con le linee guida e le regole del progetto.',
-    'Crea un file STATUS.md per tracciare i progressi, le decisioni e le modifiche importanti.',
-    'Aggiorna regolarmente questi file per fornire contesto sia agli sviluppatori che agli strumenti AI.',
-    'Usa questi file come riferimento per Copilot e per la revisione del codice.'
+    'Stabilisci un documento README contenente le linee guida e le politiche del progetto.',
+    'Implementa un file STATUS.md dedicato al monitoraggio degli sviluppi, delle decisioni strategiche e degli interventi significativi.',
+    'Mantieni costantemente aggiornata la documentazione per garantire contesto adeguato sia agli sviluppatori che agli strumenti di intelligenza artificiale.',
+    'Utilizza sistematicamente questi documenti come fonte di riferimento per Copilot e durante i processi di revisione del codice.'
   ];
   private getMemoryRulesEnabled(): boolean {
     return this.context.globalState.get<boolean>('enableMemoryRules', false);
