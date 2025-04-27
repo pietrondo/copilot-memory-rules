@@ -134,7 +134,7 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
     if (element && element.type === 'template') {
       // Aggiungi pulsante per aprire l'editor visuale delle regole
       return Promise.resolve([
-        ...Object.entries(languageTemplates).map(([lang]) =>
+        ...Object.keys(languageTemplates).map(lang =>
           new RuleItem(lang, vscode.TreeItemCollapsibleState.Collapsed, 'templateGroup')
         ),
         new RuleItem('Apri editor visuale regole', vscode.TreeItemCollapsibleState.None, 'openRulesEditorButton')
@@ -142,10 +142,13 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
     }
     if (element && element.type === 'templateGroup') {
       const lang = typeof element.label === 'string' ? element.label : String(element.label);
-      const rules = languageTemplates[lang] || [];
-      return Promise.resolve(rules.map((rule: string) =>
-        new RuleItem(rule, vscode.TreeItemCollapsibleState.None, 'templateRule', false, false, false, false, false, lang)
-      ));
+      // Verifica che il linguaggio esista nei template e usa le sue regole
+      if (languageTemplates[lang]) {
+        return Promise.resolve(languageTemplates[lang].map((rule: string) =>
+          new RuleItem(rule, vscode.TreeItemCollapsibleState.None, 'templateRule', false, false, false, false, false, lang)
+        ));
+      }
+      return Promise.resolve([]);
     }
     if (element.type === 'default') {
       const selected = this.context.globalState.get<string[]>('selectedDefaultRules', []);
