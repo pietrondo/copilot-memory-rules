@@ -923,86 +923,109 @@ function escapeRegExp(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Create a rules directory and file in Copilot's expected format
 export function createRulesFile(context: vscode.ExtensionContext): void {
   try {
     // Get user's home directory
     const homedir = os.homedir();
     
-    // Create regole (rules) directory if it doesn't exist
-    const regoleDir = path.join(homedir, 'regole');
-    if (!fs.existsSync(regoleDir)) {
-      fs.mkdirSync(regoleDir);
-      console.log(`Directory 'regole' creata con successo in: ${regoleDir}`);
+    // Ensure .github directory exists
+    const githubDirPath = path.join(homedir, '.github');
+    if (!fs.existsSync(githubDirPath)) {
+      fs.mkdirSync(githubDirPath);
     }
     
-    // Create rules file if it doesn't exist
-    const regoleFilePath = path.join(regoleDir, 'regole.json');
-    if (!fs.existsSync(regoleFilePath)) {
-      // Get currently active rules
-      const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
-      const personalRulesText = context.globalState.get<string>('personalRules', '');
-      const personalRulesArray = personalRulesText.split(/\r?\n/).filter(r => r.trim().length > 0);
-      const memoryRulesEnabled = context.globalState.get<boolean>('enableMemoryRules', false);
-      const selectedMemoryRules = memoryRulesEnabled ? context.globalState.get<string[]>('selectedMemoryRules', []) : [];
-      
-      // Combine all active rules
-      const allRules = [...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules];
-      
-      // Create JSON object with active rules
-      const rulesObject = {
-        version: 1,
-        rules: allRules.map(rule => ({
-          text: rule,
-          active: true
-        }))
-      };
-      
-      // Write JSON file
-      fs.writeFileSync(regoleFilePath, JSON.stringify(rulesObject, null, 2));
-      console.log(`File 'regole.json' creato con successo in: ${regoleFilePath}`);
-      vscode.window.showInformationMessage(`File delle regole creato con successo in: ${regoleFilePath}`);
-    } else {
-      vscode.window.showInformationMessage(`Il file delle regole esiste già in: ${regoleFilePath}`);
-    }
+    // Create Copilot instructions file path
+    const copilotInstructionsPath = path.join(githubDirPath, 'copilot-instructions.md');
     
-    // Open the file in the editor
-    vscode.workspace.openTextDocument(regoleFilePath).then(doc => {
+    // Get currently active rules
+    const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
+    const personalRulesText = context.globalState.get<string>('personalRules', '');
+    const personalRulesArray = personalRulesText.split(/\r?\n/).filter(r => r.trim().length > 0);
+    const memoryRulesEnabled = context.globalState.get<boolean>('enableMemoryRules', false);
+    const selectedMemoryRules = memoryRulesEnabled ? context.globalState.get<string[]>('selectedMemoryRules', []) : [];
+    
+    // Combine all active rules
+    const allRules = [...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules];
+    
+    // Create Markdown content for the instructions file
+    let markdownContent = `# GitHub Copilot Instructions\n\n`;
+    markdownContent += `The following rules should be applied when generating code:\n\n`;
+    
+    // Add each rule as a separate instruction
+    allRules.forEach(rule => {
+      markdownContent += `- ${rule}\n`;
+    });
+    
+    // Add additional information
+    markdownContent += `\n## Last Updated\n`;
+    markdownContent += `These rules were last updated on ${new Date().toLocaleString()}.\n`;
+    
+    // Write Markdown file
+    fs.writeFileSync(copilotInstructionsPath, markdownContent);
+    console.log(`Copilot instructions file created successfully at: ${copilotInstructionsPath}`);
+    vscode.window.showInformationMessage(`Copilot instructions file created successfully at: ${copilotInstructionsPath}`);
+    
+    // Also save to the traditional location for backward compatibility
+    const configPath = ensureCopilotConfigDirectory();
+    const rulesPath = path.join(configPath, 'rules.json');
+    
+    // Create JSON object with active rules
+    const rulesObject = {
+      version: 1,
+      rules: allRules
+    };
+    
+    // Write JSON file
+    fs.writeFileSync(rulesPath, JSON.stringify(rulesObject, null, 2));
+    console.log(`Legacy rules file also created at: ${rulesPath}`);
+    
+    // Open the instructions file in the editor
+    vscode.workspace.openTextDocument(copilotInstructionsPath).then(doc => {
       vscode.window.showTextDocument(doc);
     });
     
   } catch (error) {
-    console.error('Errore durante la creazione del file delle regole:', error);
-    vscode.window.showErrorMessage(`Errore durante la creazione del file delle regole: ${error}`);
+    console.error('Error creating Copilot instructions file:', error);
+    vscode.window.showErrorMessage(`Error creating Copilot instructions file: ${error}`);
   }
 }
 
 // Read rules file and determine which rules are active
 export function readRulesFile(): { activeRules: string[], inactiveRules: string[] } {
   try {
-    // Get user's home directory
-    const homedir = os.homedir();
-    
-    // Path to rules file
-    const regoleFilePath = path.join(homedir, 'regole', 'regole.json');
+    // Utilizza il percorso standard di Copilot
+    const configPath = getCopilotConfigPath();
+    const rulesPath = path.join(configPath, 'rules.json');
     
     // Check if the file exists
-    if (fs.existsSync(regoleFilePath)) {
+    if (fs.existsSync(rulesPath)) {
       // Read and parse the file
-      const fileContent = fs.readFileSync(regoleFilePath, 'utf8');
+      const fileContent = fs.readFileSync(rulesPath, 'utf8');
       const rulesObject = JSON.parse(fileContent);
       
       // Extract active and inactive rules
       const activeRules: string[] = [];
       const inactiveRules: string[] = [];
       
-      if (rulesObject.rules && Array.isArray(rulesObject.rules)) {
-        rulesObject.rules.forEach((rule: { text: string, active: boolean }) => {
-          if (rule.active) {
-            activeRules.push(rule.text);
-          } else {
-            inactiveRules.push(rule.text);
-          }
-        });
+      if (rulesObject.rules) {
+        // La versione standard di Copilot ha solo un array di stringhe
+        if (Array.isArray(rulesObject.rules) && typeof rulesObject.rules[0] === 'string') {
+          // Tutte le regole sono considerate attive
+          rulesObject.rules.forEach((rule: string) => {
+            activeRules.push(rule);
+          });
+        } 
+        // La nostra versione estesa ha un array di oggetti con proprietà text e active
+        else if (Array.isArray(rulesObject.rules) && typeof rulesObject.rules[0] === 'object') {
+          rulesObject.rules.forEach((rule: { text: string, active: boolean }) => {
+            if (rule.active) {
+              activeRules.push(rule.text);
+            } else {
+              inactiveRules.push(rule.text);
+            }
+          });
+        }
       }
       
       console.log(`Regole attive: ${activeRules.length}, Regole inattive: ${inactiveRules.length}`);
