@@ -70,7 +70,7 @@
         {
           "id": "copilotRulesActivityBar",
           "title": "Copilot Rules",
-          "icon": "icon.svg"
+          "icon": "resources/activity-bar-icon.svg"
         }
       ]
     },

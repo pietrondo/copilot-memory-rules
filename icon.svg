@@ -1,4 +1,31 @@
-<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="32" height="32" rx="8" fill="#0078D4"/>
-  <path d="M10 22L16 10L22 22H10Z" fill="white"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Sfondo circolare con sfumatura -->
+  <circle cx="64" cy="64" r="60" fill="url(#gradient)" />
+  
+  <!-- Simbolo di Copilot stilizzato -->
+  <path d="M50 42C50 37.5817 53.5817 34 58 34H70C74.4183 34 78 37.5817 78 42V54C78 58.4183 74.4183 62 70 62H58C53.5817 62 50 58.4183 50 54V42Z" fill="white"/>
+  <circle cx="59" cy="44" r="3" fill="#0D1117"/>
+  <circle cx="69" cy="44" r="3" fill="#0D1117"/>
+  
+  <!-- Lista di regole stilizzata -->
+  <rect x="36" y="72" width="56" height="8" rx="2" fill="white" />
+  <rect x="36" y="86" width="56" height="8" rx="2" fill="white" />
+  <rect x="36" y="100" width="56" height="8" rx="2" fill="white" />
+  
+  <!-- Checkmark su una regola -->
+  <circle cx="30" cy="76" r="6" fill="#4CAF50" />
+  <path d="M27 76L29 78L33 74" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  
+  <!-- Simbolo di impostazioni sopra la lista -->
+  <circle cx="92" cy="60" r="10" fill="#0078D4" />
+  <path d="M92 56V64M88 60H96" stroke="white" stroke-width="2" stroke-linecap="round" />
+  
+  <!-- Definizione della sfumatura -->
+  <defs>
+    <linearGradient id="gradient" x1="64" y1="4" x2="64" y2="124" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0D1117" />
+      <stop offset="1" stop-color="#161B22" />
+    </linearGradient>
+  </defs>
 </svg>

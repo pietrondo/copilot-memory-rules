@@ -769,7 +769,7 @@ export function activate(context: vscode.ExtensionContext) {
       </body>
       </html>
     `;
-    
+
     // Gestione messaggi dalla webview
     panel.webview.onDidReceiveMessage(async msg => {
       if (msg.type === 'save') {
@@ -852,6 +852,242 @@ export function activate(context: vscode.ExtensionContext) {
   }));
 
   context.subscriptions.push(disposable);
+
+  // Indicatore status bar per regole attive
+  const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  statusBarItem.command = 'copilot-rules-injector.openRulesEditor';
+  context.subscriptions.push(statusBarItem);
+
+  // Funzione per aggiornare l'indicatore della status bar
+  function updateStatusBar() {
+    const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
+    const personalRules = context.globalState.get<string>('personalRules', '').split(/\r?\n/).filter(r => r.trim().length > 0);
+    const memoryRulesEnabled = context.globalState.get<boolean>('enableMemoryRules', false);
+    const selectedMemoryRules = memoryRulesEnabled ? context.globalState.get<string[]>('selectedMemoryRules', []) : [];
+    
+    const totalActiveRules = selectedDefaultRules.length + personalRules.length + selectedMemoryRules.length;
+    
+    if (totalActiveRules > 0) {
+      statusBarItem.text = `$(copilot) Regole Copilot: ${totalActiveRules}`;
+      statusBarItem.tooltip = `${selectedDefaultRules.length} regole default, ${personalRules.length} regole personali, ${selectedMemoryRules.length} regole memoria`;
+      statusBarItem.show();
+    } else {
+      statusBarItem.text = `$(copilot) Nessuna regola attiva`;
+      statusBarItem.tooltip = 'Clicca per configurare le regole di Copilot';
+      statusBarItem.show();
+    }
+  }
+
+  // Aggiorna la status bar quando le regole cambiano
+  context.subscriptions.push(vscode.commands.registerCommand('copilot-rules-injector.updateStatusBar', () => {
+    updateStatusBar();
+  }));
+
+  // Modifica tutti i comandi che alterano le regole per aggiornare la status bar
+  const originalRefresh = rulesProvider.refresh;
+  rulesProvider.refresh = () => {
+    originalRefresh.call(rulesProvider);
+    updateStatusBar();
+  };
+
+  // Inizializza la status bar
+  updateStatusBar();
+
+  // Mostra pagina di benvenuto al primo avvio
+  const hasShownWelcomePage = context.globalState.get<boolean>('hasShownWelcomePage', false);
+  if (!hasShownWelcomePage) {
+    showWelcomePage(context);
+    context.globalState.update('hasShownWelcomePage', true);
+  }
+}
+
+// Funzione per mostrare la pagina di benvenuto
+function showWelcomePage(context: vscode.ExtensionContext) {
+  const panel = vscode.window.createWebviewPanel(
+    'copilotRulesWelcome',
+    'Benvenuto in Copilot Rules Injector',
+    vscode.ViewColumn.One,
+    { enableScripts: true }
+  );
+
+  const iconPath = vscode.Uri.file(
+    vscode.Uri.joinPath(context.extensionUri, 'icon.svg').fsPath
+  );
+
+  panel.iconPath = iconPath;
+
+  panel.webview.html = `
+    <!DOCTYPE html>
+    <html lang="it">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Benvenuto in Copilot Rules Injector</title>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+                padding: 20px;
+                color: var(--vscode-foreground);
+                background-color: var(--vscode-editor-background);
+                max-width: 800px;
+                margin: 0 auto;
+            }
+            h1 {
+                color: var(--vscode-editor-foreground);
+                border-bottom: 1px solid var(--vscode-panel-border);
+                padding-bottom: 10px;
+                text-align: center;
+            }
+            .logo {
+                text-align: center;
+                margin: 20px 0;
+            }
+            .logo img {
+                width: 100px;
+                height: 100px;
+            }
+            .section {
+                margin-bottom: 30px;
+                background-color: var(--vscode-editor-background);
+                border-radius: 6px;
+                padding: 15px;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            }
+            h2 {
+                color: var(--vscode-panelTitle-activeForeground);
+            }
+            .feature {
+                display: flex;
+                align-items: flex-start;
+                margin-bottom: 15px;
+            }
+            .feature-icon {
+                font-size: 24px;
+                margin-right: 15px;
+                color: var(--vscode-textLink-foreground);
+            }
+            .feature-text {
+                flex: 1;
+            }
+            .button-container {
+                display: flex;
+                justify-content: center;
+                margin-top: 30px;
+            }
+            button {
+                background-color: var(--vscode-button-background);
+                color: var(--vscode-button-foreground);
+                border: none;
+                padding: 10px 20px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+                margin: 0 10px;
+            }
+            button:hover {
+                background-color: var(--vscode-button-hoverBackground);
+            }
+            .steps {
+                margin-left: 20px;
+            }
+            .steps li {
+                margin-bottom: 10px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="logo">
+            <img src="https://raw.githubusercontent.com/github/copilot.vim/main/doc/copilot.svg" alt="Copilot Logo">
+        </div>
+        <h1>Benvenuto in Copilot Rules Injector</h1>
+        
+        <div class="section">
+            <h2>Cos'è Copilot Rules Injector?</h2>
+            <p>Questa estensione ti permette di gestire in modo semplice e potente le regole per GitHub Copilot, migliorando la qualità del codice generato dall'IA in base alle tue preferenze e alle best practice del tuo team.</p>
+        </div>
+        
+        <div class="section">
+            <h2>Caratteristiche principali</h2>
+            
+            <div class="feature">
+                <div class="feature-icon">📚</div>
+                <div class="feature-text">
+                    <strong>Regole di default</strong>
+                    <p>Seleziona tra regole predefinite per migliorare l'output di Copilot per qualsiasi progetto.</p>
+                </div>
+            </div>
+            
+            <div class="feature">
+                <div class="feature-icon">👤</div>
+                <div class="feature-text">
+                    <strong>Regole personali</strong>
+                    <p>Crea e modifica le tue regole personalizzate per adattarle alle tue esigenze specifiche.</p>
+                </div>
+            </div>
+            
+            <div class="feature">
+                <div class="feature-icon">🗄️</div>
+                <div class="feature-text">
+                    <strong>Regole della memoria</strong>
+                    <p>Mantieni il contesto del progetto con regole che aiutano Copilot a comprendere meglio il tuo lavoro.</p>
+                </div>
+            </div>
+            
+            <div class="feature">
+                <div class="feature-icon">🧩</div>
+                <div class="feature-text">
+                    <strong>Template per linguaggi/framework</strong>
+                    <p>Aggiungi regole specifiche per JavaScript, Python, TypeScript, React, Node.js, Django e altri.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Come iniziare</h2>
+            <ol class="steps">
+                <li>Apri la sidebar di Copilot Rules Injector nell'activity bar di VS Code.</li>
+                <li>Seleziona le regole di default che vuoi attivare.</li>
+                <li>Aggiungi regole dai template per i linguaggi/framework che utilizzi.</li>
+                <li>Crea regole personali specifiche per il tuo progetto.</li>
+                <li>Tutte le regole selezionate verranno automaticamente salvate nel file <code>.github/copilot-instructions.md</code>.</li>
+            </ol>
+        </div>
+        
+        <div class="button-container">
+            <button id="openSidebar">Apri Sidebar</button>
+            <button id="openEditor">Apri Editor Visuale</button>
+        </div>
+        
+        <script>
+            const vscode = acquireVsCodeApi();
+            
+            document.getElementById('openSidebar').addEventListener('click', () => {
+                vscode.postMessage({ command: 'openSidebar' });
+            });
+            
+            document.getElementById('openEditor').addEventListener('click', () => {
+                vscode.postMessage({ command: 'openEditor' });
+            });
+        </script>
+    </body>
+    </html>
+  `;
+
+  // Gestisci i messaggi dalla webview
+  panel.webview.onDidReceiveMessage(
+    message => {
+      switch (message.command) {
+        case 'openSidebar':
+          vscode.commands.executeCommand('workbench.view.extension.copilotRulesActivityBar');
+          return;
+        case 'openEditor':
+          vscode.commands.executeCommand('copilot-rules-injector.openRulesEditor');
+          return;
+      }
+    },
+    undefined,
+    context.subscriptions
+  );
 }
 
 // This method is called when your extension is deactivated
