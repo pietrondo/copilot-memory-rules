@@ -274,6 +274,7 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
         new RuleItem('Regole della memoria', vscode.TreeItemCollapsibleState.Expanded, 'memory', false, false, false, false, false, undefined, memoryRulesEnabled ? selectedMemoryRules.length : 0),
         new RuleItem('Template di regole', vscode.TreeItemCollapsibleState.Expanded, 'template'),
         new RuleItem('Crea file delle regole', vscode.TreeItemCollapsibleState.None, 'createRulesFileButton'),
+        new RuleItem('Salva regole in VS Code', vscode.TreeItemCollapsibleState.None, 'saveRulesButton'),
         new RuleItem('Verifica regole attive', vscode.TreeItemCollapsibleState.None, 'showRulesFileStatusButton')
       ]);
     }
@@ -562,11 +563,21 @@ class RuleItem extends vscode.TreeItem {
     if (type === 'createRulesFileButton') {
       this.iconPath = new vscode.ThemeIcon('cloud-upload');
       this.command = {
-        title: 'Crea file delle regole',
+        title: 'Salva regole nel progetto',
         command: 'copilotRules.createRulesFile',
         arguments: []
       };
-      this.tooltip = 'Crea un file delle regole nella cartella del progetto per GitHub Copilot';
+      this.tooltip = 'Salva le regole selezionate nel file di istruzioni GitHub Copilot del progetto';
+    }
+    
+    if (type === 'saveRulesButton') {
+      this.iconPath = new vscode.ThemeIcon('save');
+      this.command = {
+        title: 'Salva regole in VS Code',
+        command: 'copilotRules.saveSelectedRules',
+        arguments: []
+      };
+      this.tooltip = 'Salva le regole selezionate in VS Code (senza inserirle nel progetto)';
     }
     
     if (type === 'showRulesFileStatusButton') {
@@ -1309,8 +1320,37 @@ export function createRulesFile(context: vscode.ExtensionContext): void {
     }
     
     // Create Copilot instructions file path
-    const copilotInstructionsPath = path.join(githubDirPath, 'copilot-instructions.md');
+    const copilotInstructionsPath = path.join(homedir, '.github', 'copilot-instructions.md');
     
+    // Check if file already exists and ask for confirmation to overwrite
+    if (fs.existsSync(copilotInstructionsPath)) {
+      // Show confirmation dialog with buttons
+      vscode.window.showWarningMessage(
+        'Il file delle regole Copilot esiste già. Vuoi sovrascriverlo con le regole selezionate?',
+        { modal: true },
+        'Sì', 'No'
+      ).then(selection => {
+        if (selection === 'Sì') {
+          // User confirmed, proceed with creating/updating the file
+          proceedWithRuleFileCreation(context, copilotInstructionsPath);
+        } else {
+          // User cancelled, show information message
+          vscode.window.showInformationMessage('Creazione del file regole annullata.');
+        }
+      });
+    } else {
+      // File doesn't exist, no need for confirmation
+      proceedWithRuleFileCreation(context, copilotInstructionsPath);
+    }
+  } catch (error) {
+    console.error('Errore durante la creazione del file di istruzioni Copilot:', error);
+    vscode.window.showErrorMessage(`Errore durante la creazione del file di istruzioni Copilot: ${error}`);
+  }
+}
+
+// Helper function to actually create the rules file
+function proceedWithRuleFileCreation(context: vscode.ExtensionContext, copilotInstructionsPath: string): void {
+  try {
     // Get currently active rules
     const selectedDefaultRules = context.globalState.get<string[]>('selectedDefaultRules', []);
     const personalRulesText = context.globalState.get<string>('personalRules', '');
@@ -1318,68 +1358,116 @@ export function createRulesFile(context: vscode.ExtensionContext): void {
     const memoryRulesEnabled = context.globalState.get<boolean>('enableMemoryRules', false);
     const selectedMemoryRules = memoryRulesEnabled ? context.globalState.get<string[]>('selectedMemoryRules', []) : [];
     
-    // Combine all active rules
-    const allRules = [...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules];
+    // Combine all selected rules
+    const selectedRules = [...selectedDefaultRules, ...personalRulesArray, ...selectedMemoryRules];
     
-    // Create Markdown content for the instructions file
+    // Read existing rules from the file if it exists
+    let existingRules: string[] = [];
+    if (fs.existsSync(copilotInstructionsPath)) {
+      const existingContent = fs.readFileSync(copilotInstructionsPath, 'utf8');
+      
+      // Estrai le regole da un file Markdown esistente
+      // Cerca le righe che iniziano con "- " dopo l'intestazione
+      const ruleRegex = /^- (.+)$/gm;
+      let match;
+      while ((match = ruleRegex.exec(existingContent)) !== null) {
+        if (match[1] && match[1].trim().length > 0) {
+          existingRules.push(match[1].trim());
+        }
+      }
+      
+      console.log(`Trovate ${existingRules.length} regole esistenti nel file di istruzioni.`);
+    }
+    
+    // Confronta le regole selezionate con quelle esistenti
+    const newRules: string[] = [];
+    const duplicateRules: string[] = [];
+    
+    // Controlla quali regole selezionate sono nuove e quali sono duplicati
+    selectedRules.forEach(rule => {
+      if (!existingRules.some(existingRule => 
+        existingRule.toLowerCase() === rule.toLowerCase()
+      )) {
+        newRules.push(rule);
+      } else {
+        duplicateRules.push(rule);
+      }
+    });
+    
+    // Unisci le regole esistenti con quelle nuove
+    const allRules = [...existingRules, ...newRules];
+    
+    // Crea il contenuto Markdown per il file di istruzioni
     let markdownContent = `# GitHub Copilot Instructions\n\n`;
     markdownContent += `The following rules should be applied when generating code:\n\n`;
     
-    // Add each rule as a separate instruction
+    // Aggiungi ogni regola come istruzione separata
     allRules.forEach(rule => {
       markdownContent += `- ${rule}\n`;
     });
     
-    // Add additional information
+    // Aggiungi informazioni aggiuntive
     markdownContent += `\n## Last Updated\n`;
     markdownContent += `These rules were last updated on ${new Date().toLocaleString()}.\n`;
     
-    // Write Markdown file
+    // Scrivi il file Markdown
     fs.writeFileSync(copilotInstructionsPath, markdownContent);
-    console.log(`Copilot instructions file created successfully at: ${copilotInstructionsPath}`);
-    vscode.window.showInformationMessage(`Copilot instructions file created successfully at: ${copilotInstructionsPath}`);
     
-    // Also save to the traditional location for backward compatibility
+    // Prepara il messaggio per l'utente
+    let message = '';
+    if (newRules.length > 0) {
+      message += `Aggiunte ${newRules.length} nuove regole. `;
+    }
+    if (duplicateRules.length > 0) {
+      message += `${duplicateRules.length} regole erano già presenti nel file e sono state mantenute.`;
+    }
+    if (newRules.length === 0 && duplicateRules.length === 0) {
+      message = 'Nessuna nuova regola aggiunta. Il file è stato aggiornato.';
+    }
+    
+    console.log(`File di istruzioni Copilot creato con successo a: ${copilotInstructionsPath}`);
+    vscode.window.showInformationMessage(message);
+    
+    // Salva anche nel percorso tradizionale per retrocompatibilità
     const configPath = ensureCopilotConfigDirectory();
     const rulesPath = path.join(configPath, 'rules.json');
     
-    // Create JSON object with active rules
+    // Crea l'oggetto JSON con le regole attive
     const rulesObject = {
       version: 1,
       rules: allRules
     };
     
-    // Write JSON file
+    // Scrivi il file JSON
     fs.writeFileSync(rulesPath, JSON.stringify(rulesObject, null, 2));
-    console.log(`Legacy rules file also created at: ${rulesPath}`);
+    console.log(`Creato anche il file legacy delle regole in: ${rulesPath}`);
     
-    // Open the instructions file in the editor
+    // Apri il file di istruzioni nell'editor
     vscode.workspace.openTextDocument(copilotInstructionsPath).then(doc => {
       vscode.window.showTextDocument(doc);
     });
-    
   } catch (error) {
-    console.error('Error creating Copilot instructions file:', error);
-    vscode.window.showErrorMessage(`Error creating Copilot instructions file: ${error}`);
+    console.error('Errore durante la creazione del file di istruzioni Copilot:', error);
+    vscode.window.showErrorMessage(`Errore durante la creazione del file di istruzioni Copilot: ${error}`);
   }
 }
 
-// Read rules file and determine which rules are active
 export function readRulesFile(): { activeRules: string[], inactiveRules: string[] } {
   try {
     // Utilizza il percorso standard di Copilot
     const configPath = getCopilotConfigPath();
     const rulesPath = path.join(configPath, 'rules.json');
+    const homedir = os.homedir();
+    const copilotInstructionsPath = path.join(homedir, '.github', 'copilot-instructions.md');
     
-    // Check if the file exists
+    let activeRules: string[] = [];
+    let inactiveRules: string[] = [];
+    
+    // Verifica il file JSON delle regole
     if (fs.existsSync(rulesPath)) {
       // Read and parse the file
       const fileContent = fs.readFileSync(rulesPath, 'utf8');
       const rulesObject = JSON.parse(fileContent);
-      
-      // Extract active and inactive rules
-      const activeRules: string[] = [];
-      const inactiveRules: string[] = [];
       
       if (rulesObject.rules) {
         // La versione standard di Copilot ha solo un array di stringhe
@@ -1400,10 +1488,46 @@ export function readRulesFile(): { activeRules: string[], inactiveRules: string[
           });
         }
       }
-      
-      console.log(`Regole attive: ${activeRules.length}, Regole inattive: ${inactiveRules.length}`);
-      return { activeRules, inactiveRules };
     }
+    
+    // Verifica anche il file markdown delle istruzioni
+    if (fs.existsSync(copilotInstructionsPath)) {
+      const markdownContent = fs.readFileSync(copilotInstructionsPath, 'utf8');
+      
+      // Estrai le regole da un file Markdown
+      // Cerca le righe che iniziano con "- " dopo l'intestazione
+      const ruleRegex = /^- (.+)$/gm;
+      let match;
+      const markdownRules: string[] = [];
+      
+      while ((match = ruleRegex.exec(markdownContent)) !== null) {
+        if (match[1] && match[1].trim().length > 0) {
+          markdownRules.push(match[1].trim());
+        }
+      }
+      
+      // Aggiorna le regole attive e inattive
+      // Se una regola è nel file markdown ma non nel file JSON, la aggiungiamo alle attive
+      markdownRules.forEach(rule => {
+        if (!activeRules.includes(rule) && !inactiveRules.includes(rule)) {
+          activeRules.push(rule);
+        }
+      });
+      
+      // Se una regola è nel file JSON ma non nel markdown, la spostiamo nelle inattive
+      const allJsonRules = [...activeRules, ...inactiveRules];
+      activeRules = activeRules.filter(rule => markdownRules.includes(rule));
+      
+      // Aggiorna le inattive con le regole presenti nel JSON ma non nel markdown
+      allJsonRules.forEach(rule => {
+        if (!markdownRules.includes(rule) && !inactiveRules.includes(rule)) {
+          inactiveRules.push(rule);
+        }
+      });
+    }
+    
+    console.log(`Regole attive: ${activeRules.length}, Regole inattive: ${inactiveRules.length}`);
+    return { activeRules, inactiveRules };
   } catch (error) {
     console.error('Errore durante la lettura del file delle regole:', error);
     vscode.window.showErrorMessage(`Errore durante la lettura del file delle regole: ${error}`);
