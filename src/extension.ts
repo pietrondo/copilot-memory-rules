@@ -566,7 +566,7 @@ class RuleItem extends vscode.TreeItem {
     if (type === 'templateRule') {
       this.checkboxState = checked ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
       this.command = {
-        title: 'Attiva/disattiva regola template',
+        title: 'Attiva/disattivare regola template',
         command: 'copilotRules.toggleTemplateRule',
         arguments: [this]
       };
@@ -1353,6 +1353,91 @@ export function activate(context: vscode.ExtensionContext) {
       const inverted = rulesProvider.memoryRules.filter(r => !selected.includes(r));
       context.globalState.update('selectedMemoryRules', inverted);
       rulesProvider.refresh();
+    })
+  );
+
+  // Comando per suggerire regole dal codice
+  context.subscriptions.push(
+    vscode.commands.registerCommand('copilotRules.suggestRulesFromCode', async () => {
+      // Cerca pattern nei file del workspace
+      const jsFiles = await vscode.workspace.findFiles('**/*.{js,ts}', '**/node_modules/**', 100);
+      const suggestions: { rule: string, reason: string }[] = [];
+      const seen = new Set<string>();
+      for (const file of jsFiles) {
+        const doc = await vscode.workspace.openTextDocument(file);
+        const text = doc.getText();
+        if (/\bvar\b/.test(text) && !seen.has('var')) {
+          suggestions.push({
+            rule: 'Usa let/const invece di var per dichiarare variabili in JavaScript/TypeScript.',
+            reason: `Trovato 'var' in ${file.fsPath}`
+          });
+          seen.add('var');
+        }
+        if (/TODO[:\s]/i.test(text) && !seen.has('todo')) {
+          suggestions.push({
+            rule: 'Documenta i TODO nei commenti con dettagli e responsabilità chiare.',
+            reason: `Trovato TODO in ${file.fsPath}`
+          });
+          seen.add('todo');
+        }
+        if (/FIXME[:\s]/i.test(text) && !seen.has('fixme')) {
+          suggestions.push({
+            rule: 'Gestisci i FIXME con issue tracciate e commenti esplicativi.',
+            reason: `Trovato FIXME in ${file.fsPath}`
+          });
+          seen.add('fixme');
+        }
+      }
+      // Mostra la webview con i suggerimenti
+      const panel = vscode.window.createWebviewPanel(
+        'copilotRulesSuggestions',
+        'Suggerimenti Regole dal Codice',
+        vscode.ViewColumn.One,
+        { enableScripts: true }
+      );
+      const html = `
+        <html><head><meta charset='UTF-8'>
+        <style>
+          body { font-family: sans-serif; padding: 24px; background: var(--vscode-editor-background); color: var(--vscode-editor-foreground); }
+          h2 { margin-top: 0; }
+          .suggestion { border: 1px solid var(--vscode-input-border); border-radius: 5px; padding: 12px; margin-bottom: 16px; background: var(--vscode-sideBar-background); }
+          .rule { font-weight: bold; }
+          .reason { font-size: 0.95em; color: var(--vscode-descriptionForeground); margin-bottom: 8px; }
+          button { margin-top: 8px; }
+        </style></head><body>
+        <h2>Suggerimenti di Regole dal Codice</h2>
+        ${suggestions.length === 0 ? '<p>Nessun suggerimento trovato nel codice.</p>' : suggestions.map((s, i) => `
+          <div class='suggestion' data-idx='${i}'>
+            <div class='rule'>${s.rule}</div>
+            <div class='reason'>${s.reason}</div>
+            <button onclick='addRule(${i})'>Aggiungi alle regole personali</button>
+          </div>
+        `).join('')}
+        <script>
+          const vscode = acquireVsCodeApi();
+          function addRule(idx) {
+            vscode.postMessage({ type: 'addRule', idx });
+          }
+        </script>
+        </body></html>
+      `;
+      panel.webview.html = html;
+      panel.webview.onDidReceiveMessage(msg => {
+        if (msg.type === 'addRule') {
+          const rule = suggestions[msg.idx]?.rule;
+          if (rule) {
+            const personalRules = context.globalState.get('personalRules', '');
+            const arr = personalRules.split(/\r?\n/).filter(r => r.trim().length > 0);
+            if (!arr.includes(rule)) {
+              arr.push(rule);
+              context.globalState.update('personalRules', arr.join('\n'));
+              vscode.window.showInformationMessage('Regola aggiunta alle regole personali.');
+            } else {
+              vscode.window.showInformationMessage('Questa regola è già presente nelle regole personali.');
+            }
+          }
+        }
+      });
     })
   );
 }

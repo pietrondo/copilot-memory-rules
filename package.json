@@ -2,7 +2,7 @@
   "name": "copilot-rules-injector",
   "displayName": "Copilot Rules Injector",
   "description": "Estensione VS Code per inserire regole Copilot predefinite in markdown nei nuovi progetti",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "engines": {
     "vscode": "^1.99.0"
   },
@@ -73,6 +73,10 @@
       {
         "command": "copilotRules.invertMemoryRules",
         "title": "Copilot Rules: Inverti selezione Regole della Memoria"
+      },
+      {
+        "command": "copilotRules.suggestRulesFromCode",
+        "title": "Copilot Rules: Suggerisci regole dal codice"
       }
     ],
     "viewsContainers": {
