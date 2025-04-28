@@ -680,6 +680,11 @@
             <div class="rules-section">
                 <h3>Regole di Default</h3>
                 <p>Seleziona le regole di default da attivare:</p>
+                <div class="flex-row" style="margin-bottom:8px;">
+                    <button id="select-all-default" type="button">Seleziona tutto</button>
+                    <button id="deselect-all-default" type="button">Deseleziona tutto</button>
+                    <button id="invert-default" type="button">Inverti selezione</button>
+                </div>
                 <div id="default-rules-container">
                     <!-- Le regole di default verranno caricate dinamicamente da JS -->
                 </div>
@@ -688,6 +693,11 @@
             <div class="rules-section">
                 <h3>Regole della Memoria</h3>
                 <p>Seleziona le regole della memoria da attivare:</p>
+                <div class="flex-row" style="margin-bottom:8px;">
+                    <button id="select-all-memory" type="button">Seleziona tutto</button>
+                    <button id="deselect-all-memory" type="button">Deseleziona tutto</button>
+                    <button id="invert-memory" type="button">Inverti selezione</button>
+                </div>
                 <div id="memory-rules-container">
                     <!-- Le regole della memoria verranno caricate dinamicamente da JS -->
                 </div>
@@ -975,11 +985,8 @@
                                 state.selectedDefaultRules.splice(index, 1);
                             }
                         }
-                        // Aggiungi animazione per il feedback
-                        ruleElement.classList.add('shake');
-                        setTimeout(() => {
-                            ruleElement.classList.remove('shake');
-                        }, 500);
+                        ruleElement.classList.add('pulse');
+                        setTimeout(() => ruleElement.classList.remove('pulse'), 500);
                     });
                     
                     // Testo della regola
@@ -1029,11 +1036,8 @@
                                 state.selectedMemoryRules.splice(index, 1);
                             }
                         }
-                        // Aggiungi animazione per il feedback
-                        ruleElement.classList.add('shake');
-                        setTimeout(() => {
-                            ruleElement.classList.remove('shake');
-                        }, 500);
+                        ruleElement.classList.add('pulse');
+                        setTimeout(() => ruleElement.classList.remove('pulse'), 500);
                     });
                     
                     // Testo della regola
@@ -1676,6 +1680,39 @@
                     }, 500);
                 }
             }
+
+            function addQuickActions() {
+                // Default rules
+                document.getElementById('select-all-default').onclick = () => {
+                    state.selectedDefaultRules = [...state.defaultRules];
+                    renderDefaultRules();
+                };
+                document.getElementById('deselect-all-default').onclick = () => {
+                    state.selectedDefaultRules = [];
+                    renderDefaultRules();
+                };
+                document.getElementById('invert-default').onclick = () => {
+                    state.selectedDefaultRules = state.defaultRules.filter(r => !state.selectedDefaultRules.includes(r));
+                    renderDefaultRules();
+                };
+                // Memory rules
+                document.getElementById('select-all-memory').onclick = () => {
+                    state.selectedMemoryRules = [...state.memoryRules];
+                    renderMemoryRules();
+                };
+                document.getElementById('deselect-all-memory').onclick = () => {
+                    state.selectedMemoryRules = [];
+                    renderMemoryRules();
+                };
+                document.getElementById('invert-memory').onclick = () => {
+                    state.selectedMemoryRules = state.memoryRules.filter(r => !state.selectedMemoryRules.includes(r));
+                    renderMemoryRules();
+                };
+            }
+
+            // Aggiungi dopo la funzione init()
+            addQuickActions();
+
         })();
     </script>
 </body>

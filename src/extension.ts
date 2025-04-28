@@ -1323,6 +1323,38 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('Regole salvate con successo in VS Code');
     })
   );
+
+  // Dopo la registrazione dei comandi toggleDefaultRule e toggleMemoryRule, aggiungi:
+  context.subscriptions.push(
+    vscode.commands.registerCommand('copilotRules.selectAllDefaultRules', () => {
+      context.globalState.update('selectedDefaultRules', [...rulesProvider.defaultRules]);
+      rulesProvider.refresh();
+    }),
+    vscode.commands.registerCommand('copilotRules.deselectAllDefaultRules', () => {
+      context.globalState.update('selectedDefaultRules', []);
+      rulesProvider.refresh();
+    }),
+    vscode.commands.registerCommand('copilotRules.invertDefaultRules', () => {
+      const selected = context.globalState.get<string[]>('selectedDefaultRules', []);
+      const inverted = rulesProvider.defaultRules.filter(r => !selected.includes(r));
+      context.globalState.update('selectedDefaultRules', inverted);
+      rulesProvider.refresh();
+    }),
+    vscode.commands.registerCommand('copilotRules.selectAllMemoryRules', () => {
+      context.globalState.update('selectedMemoryRules', [...rulesProvider.memoryRules]);
+      rulesProvider.refresh();
+    }),
+    vscode.commands.registerCommand('copilotRules.deselectAllMemoryRules', () => {
+      context.globalState.update('selectedMemoryRules', []);
+      rulesProvider.refresh();
+    }),
+    vscode.commands.registerCommand('copilotRules.invertMemoryRules', () => {
+      const selected = context.globalState.get<string[]>('selectedMemoryRules', []);
+      const inverted = rulesProvider.memoryRules.filter(r => !selected.includes(r));
+      context.globalState.update('selectedMemoryRules', inverted);
+      rulesProvider.refresh();
+    })
+  );
 }
 
 export function deactivate() {}

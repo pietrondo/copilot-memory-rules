@@ -49,6 +49,30 @@
       {
         "command": "copilotRules.showRulesFileStatus",
         "title": "Verifica Regole Attive"
+      },
+      {
+        "command": "copilotRules.selectAllDefaultRules",
+        "title": "Copilot Rules: Seleziona tutte le Regole di Default"
+      },
+      {
+        "command": "copilotRules.deselectAllDefaultRules",
+        "title": "Copilot Rules: Deseleziona tutte le Regole di Default"
+      },
+      {
+        "command": "copilotRules.invertDefaultRules",
+        "title": "Copilot Rules: Inverti selezione Regole di Default"
+      },
+      {
+        "command": "copilotRules.selectAllMemoryRules",
+        "title": "Copilot Rules: Seleziona tutte le Regole della Memoria"
+      },
+      {
+        "command": "copilotRules.deselectAllMemoryRules",
+        "title": "Copilot Rules: Deseleziona tutte le Regole della Memoria"
+      },
+      {
+        "command": "copilotRules.invertMemoryRules",
+        "title": "Copilot Rules: Inverti selezione Regole della Memoria"
       }
     ],
     "viewsContainers": {
@@ -68,6 +92,40 @@
         }
       ]
     }
+  },
+  "menus": {
+    "view/item/context": [
+      {
+        "command": "copilotRules.selectAllDefaultRules",
+        "when": "view == copilotRulesView && viewItem == default",
+        "group": "inline@10"
+      },
+      {
+        "command": "copilotRules.deselectAllDefaultRules",
+        "when": "view == copilotRulesView && viewItem == default",
+        "group": "inline@11"
+      },
+      {
+        "command": "copilotRules.invertDefaultRules",
+        "when": "view == copilotRulesView && viewItem == default",
+        "group": "inline@12"
+      },
+      {
+        "command": "copilotRules.selectAllMemoryRules",
+        "when": "view == copilotRulesView && viewItem == memory",
+        "group": "inline@10"
+      },
+      {
+        "command": "copilotRules.deselectAllMemoryRules",
+        "when": "view == copilotRulesView && viewItem == memory",
+        "group": "inline@11"
+      },
+      {
+        "command": "copilotRules.invertMemoryRules",
+        "when": "view == copilotRulesView && viewItem == memory",
+        "group": "inline@12"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
