@@ -80,9 +80,6 @@ Per importare regole:
 - `Copilot Rules Injector: Suggerisci regole`: Analizza il codice e suggerisce regole contestuali
 - `Copilot Rules Injector: Inietta regole selezionate`: Crea/aggiorna il file `.github/copilot-instructions.md` con le regole selezionate
 
-## Screenshots
-
-*[Inserire qui screenshot dell'estensione con sidebar, editor visuale, ecc.]*
 
 ## Come funziona
 
@@ -116,7 +113,7 @@ Poiché questa estensione non è ancora disponibile nel marketplace di VS Code, 
 ### Passi per l'installazione
 1. Clona il repository:
    ```bash
-   git clone https://github.com/tuo-username/copilot-rules-injector.git
+   git clone https://github.com/pietrondo/copilot-memory-rules
    cd copilot-rules-injector
    ```
 
