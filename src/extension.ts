@@ -225,7 +225,7 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
   private context: vscode.ExtensionContext;
   public defaultRules: string[] = [
     // Specifica le convenzioni di stile e strumenti usati dal team
-    'Scrivi JavaScript usando doppi apici e tabulazione per l’indentazione.',
+    'Scrivi JavaScript usando doppi apici e tabulazione per l\'indentazione.',
     'Per le dipendenze Java usa Bazel, non Maven.',
     'Segui lo standard PEP8 per Python.',
     'Per le chiamate HTTP preferisci fetch ad axios.',
@@ -243,7 +243,7 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
     'Condividi con il gruppo di lavoro le direttive che si sono dimostrate particolarmente efficaci.',
     'Documenta errori significativi e relative soluzioni in commenti strutturati con prefisso "ERROR:" seguito da "SOLUTION:" e "CONTEXT:", per costruire una knowledge base accessibile e facilmente consultabile.',
     // Nuove regole efficaci e avanzate
-    'Includi una breve panoramica del progetto all’inizio della documentazione.',
+    'Includi una breve panoramica del progetto all\'inizio della documentazione.',
     'Usa sempre single quotes per le stringhe in JavaScript.',
     'Prefissa i parametri con "par", le variabili con "var", le risorse con "res" e i moduli con "mod".',
     'Ogni funzione pubblica deve avere un commento JSDoc o equivalente.',
@@ -253,7 +253,8 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
     'Documenta ogni nuova dipendenza aggiunta in README.md e usa solo pacchetti approvati.',
     'Segui il formato Conventional Commits per i messaggi di commit.',
     'Le pull request devono essere sempre revisionate da almeno un membro del team.',
-    'Usa Jira per il tracking di issue e task e aggiorna lo stato delle attività in tempo reale.'
+    'Usa Jira per il tracking di issue e task e aggiorna lo stato delle attività in tempo reale.',
+    'Mantieni ogni file sotto le 500 righe; se si supera questo limite, suddividi e modularizza il codice in più file con responsabilità chiare.'
   ];
   public memoryRules: string[] = [
     // Memoria del progetto: progressi, errori, standard, esempi pratici e prompt file
@@ -332,7 +333,8 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
     if (element.type === 'personal') {
       const personalRules = this.context.globalState.get<string>('personalRules', '');
       return Promise.resolve([
-        new RuleItem(personalRules || 'Nessuna regola personale salvata.', vscode.TreeItemCollapsibleState.None, 'personalRule', false, true)
+        new RuleItem(personalRules || 'Nessuna regola personale salvata.', vscode.TreeItemCollapsibleState.None, 'personalRule', false, true),
+        new RuleItem('Aggiungi regola personale', vscode.TreeItemCollapsibleState.None, 'addPersonalRuleButton', false, false, false, false, true)
       ]);
     }
     if (element && element.type === 'memory') {
@@ -344,7 +346,7 @@ class CopilotRulesProvider implements vscode.TreeDataProvider<RuleItem> {
       const selected = this.context.globalState.get<string[]>('selectedMemoryRules', []);
       return Promise.resolve(this.memoryRules.map(rule => {
         const checked = selected.includes(rule);
-        return new RuleItem(rule, vscode.TreeItemCollapsibleState.None, 'memoryRule', checked, false, false, true);
+        return new RuleItem(rule, vscode.TreeItemCollapsibleState.None, 'memoryRule', checked, false, false, false, true);
       }));
     }
     return Promise.resolve([]);
@@ -548,9 +550,24 @@ class RuleItem extends vscode.TreeItem {
       }
     }
     
+    if (type === 'addPersonalRuleButton') {
+      this.iconPath = new vscode.ThemeIcon('add');
+      this.command = {
+        title: 'Aggiungi regola personale',
+        command: 'copilotRules.addPersonalRule',
+        arguments: []
+      };
+      this.tooltip = 'Aggiungi una nuova regola personalizzata';
+    }
+    
     if (type === 'personalRule' && isTextEdit) {
       this.contextValue = 'personalRule';
       this.iconPath = new vscode.ThemeIcon('edit');
+      this.command = {
+        title: 'Modifica regole personali',
+        command: 'copilotRules.editPersonalRules',
+        arguments: []
+      };
     }
     
     if (type === 'memoryDisabled') {
@@ -1316,126 +1333,71 @@ export function activate(context: vscode.ExtensionContext) {
       rulesProvider.refresh();
     })
   );
-  
-  // Registra il comando per salvare le regole selezionate in VS Code
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.saveSelectedRules', () => {
-      vscode.window.showInformationMessage('Regole salvate con successo in VS Code');
-    })
-  );
 
-  // Dopo la registrazione dei comandi toggleDefaultRule e toggleMemoryRule, aggiungi:
+  // Comando per aggiungere una regola personale
   context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.selectAllDefaultRules', () => {
-      context.globalState.update('selectedDefaultRules', [...rulesProvider.defaultRules]);
-      rulesProvider.refresh();
-    }),
-    vscode.commands.registerCommand('copilotRules.deselectAllDefaultRules', () => {
-      context.globalState.update('selectedDefaultRules', []);
-      rulesProvider.refresh();
-    }),
-    vscode.commands.registerCommand('copilotRules.invertDefaultRules', () => {
-      const selected = context.globalState.get<string[]>('selectedDefaultRules', []);
-      const inverted = rulesProvider.defaultRules.filter(r => !selected.includes(r));
-      context.globalState.update('selectedDefaultRules', inverted);
-      rulesProvider.refresh();
-    }),
-    vscode.commands.registerCommand('copilotRules.selectAllMemoryRules', () => {
-      context.globalState.update('selectedMemoryRules', [...rulesProvider.memoryRules]);
-      rulesProvider.refresh();
-    }),
-    vscode.commands.registerCommand('copilotRules.deselectAllMemoryRules', () => {
-      context.globalState.update('selectedMemoryRules', []);
-      rulesProvider.refresh();
-    }),
-    vscode.commands.registerCommand('copilotRules.invertMemoryRules', () => {
-      const selected = context.globalState.get<string[]>('selectedMemoryRules', []);
-      const inverted = rulesProvider.memoryRules.filter(r => !selected.includes(r));
-      context.globalState.update('selectedMemoryRules', inverted);
-      rulesProvider.refresh();
-    })
-  );
-
-  // Comando per suggerire regole dal codice
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copilotRules.suggestRulesFromCode', async () => {
-      // Cerca pattern nei file del workspace
-      const jsFiles = await vscode.workspace.findFiles('**/*.{js,ts}', '**/node_modules/**', 100);
-      const suggestions: { rule: string, reason: string }[] = [];
-      const seen = new Set<string>();
-      for (const file of jsFiles) {
-        const doc = await vscode.workspace.openTextDocument(file);
-        const text = doc.getText();
-        if (/\bvar\b/.test(text) && !seen.has('var')) {
-          suggestions.push({
-            rule: 'Usa let/const invece di var per dichiarare variabili in JavaScript/TypeScript.',
-            reason: `Trovato 'var' in ${file.fsPath}`
-          });
-          seen.add('var');
+    vscode.commands.registerCommand('copilotRules.addPersonalRule', async () => {
+      // Mostra un input box per inserire la nuova regola
+      const newRule = await vscode.window.showInputBox({
+        placeHolder: 'Inserisci una nuova regola personalizzata',
+        prompt: 'La regola verrà aggiunta alle tue regole personali'
+      });
+      
+      if (newRule) {
+        // Ottieni le regole personali esistenti
+        const personalRules = context.globalState.get<string>('personalRules', '');
+        const personalRulesArray = personalRules.split(/\r?\n/).filter(r => r.trim().length > 0);
+        
+        // Verifica se la regola esiste già
+        if (personalRulesArray.includes(newRule)) {
+          vscode.window.showInformationMessage('Questa regola personale esiste già.');
+          return;
         }
-        if (/TODO[:\s]/i.test(text) && !seen.has('todo')) {
-          suggestions.push({
-            rule: 'Documenta i TODO nei commenti con dettagli e responsabilità chiare.',
-            reason: `Trovato TODO in ${file.fsPath}`
-          });
-          seen.add('todo');
-        }
-        if (/FIXME[:\s]/i.test(text) && !seen.has('fixme')) {
-          suggestions.push({
-            rule: 'Gestisci i FIXME con issue tracciate e commenti esplicativi.',
-            reason: `Trovato FIXME in ${file.fsPath}`
-          });
-          seen.add('fixme');
-        }
+        
+        // Aggiungi la nuova regola
+        personalRulesArray.push(newRule);
+        const updatedRules = personalRulesArray.join('\n');
+        
+        // Aggiorna lo stato globale
+        context.globalState.update('personalRules', updatedRules);
+        
+        // Mostra un messaggio di conferma
+        vscode.window.showInformationMessage('Regola personale aggiunta con successo.');
+        
+        // Aggiorna la visualizzazione
+        rulesProvider.refresh();
       }
-      // Mostra la webview con i suggerimenti
-      const panel = vscode.window.createWebviewPanel(
-        'copilotRulesSuggestions',
-        'Suggerimenti Regole dal Codice',
-        vscode.ViewColumn.One,
-        { enableScripts: true }
-      );
-      const html = `
-        <html><head><meta charset='UTF-8'>
-        <style>
-          body { font-family: sans-serif; padding: 24px; background: var(--vscode-editor-background); color: var(--vscode-editor-foreground); }
-          h2 { margin-top: 0; }
-          .suggestion { border: 1px solid var(--vscode-input-border); border-radius: 5px; padding: 12px; margin-bottom: 16px; background: var(--vscode-sideBar-background); }
-          .rule { font-weight: bold; }
-          .reason { font-size: 0.95em; color: var(--vscode-descriptionForeground); margin-bottom: 8px; }
-          button { margin-top: 8px; }
-        </style></head><body>
-        <h2>Suggerimenti di Regole dal Codice</h2>
-        ${suggestions.length === 0 ? '<p>Nessun suggerimento trovato nel codice.</p>' : suggestions.map((s, i) => `
-          <div class='suggestion' data-idx='${i}'>
-            <div class='rule'>${s.rule}</div>
-            <div class='reason'>${s.reason}</div>
-            <button onclick='addRule(${i})'>Aggiungi alle regole personali</button>
-          </div>
-        `).join('')}
-        <script>
-          const vscode = acquireVsCodeApi();
-          function addRule(idx) {
-            vscode.postMessage({ type: 'addRule', idx });
-          }
-        </script>
-        </body></html>
-      `;
-      panel.webview.html = html;
-      panel.webview.onDidReceiveMessage(msg => {
-        if (msg.type === 'addRule') {
-          const rule = suggestions[msg.idx]?.rule;
-          if (rule) {
-            const personalRules = context.globalState.get('personalRules', '');
-            const arr = personalRules.split(/\r?\n/).filter(r => r.trim().length > 0);
-            if (!arr.includes(rule)) {
-              arr.push(rule);
-              context.globalState.update('personalRules', arr.join('\n'));
-              vscode.window.showInformationMessage('Regola aggiunta alle regole personali.');
-            } else {
-              vscode.window.showInformationMessage('Questa regola è già presente nelle regole personali.');
-            }
-          }
+    })
+  );
+
+  // Aggiungi il comando al menu contestuale delle regole personali
+  context.subscriptions.push(
+    vscode.commands.registerCommand('copilotRules.editPersonalRules', async () => {
+      // Ottieni le regole personali esistenti
+      const personalRules = context.globalState.get<string>('personalRules', '');
+      
+      // Crea un documento temporaneo con le regole attuali
+      const document = await vscode.workspace.openTextDocument({
+        content: personalRules,
+        language: 'markdown'
+      });
+      
+      // Mostra l'editor
+      const editor = await vscode.window.showTextDocument(document);
+      
+      // Aggiungi un listener per salvare le modifiche quando l'editor viene chiuso
+      const subscription = vscode.window.onDidChangeActiveTextEditor(async (e) => {
+        if (e && e.document !== document) {
+          // L'utente ha cambiato editor, salviamo le modifiche
+          const updatedContent = document.getText();
+          context.globalState.update('personalRules', updatedContent);
+          subscription.dispose();
+          
+          // Aggiorna la visualizzazione
+          rulesProvider.refresh();
+          
+          // Mostra un messaggio di conferma
+          vscode.window.showInformationMessage('Regole personali aggiornate con successo.');
         }
       });
     })
@@ -1667,7 +1629,7 @@ export function readRulesFile(): { activeRules: string[], inactiveRules: string[
     }
     
     console.log(`Regole attive: ${activeRules.length}, Regole inattive: ${inactiveRules.length}`);
-    return { activeRules, inactiveRules };
+    return { activeRules: activeRules, inactiveRules };
   } catch (error) {
     console.error('Errore durante la lettura del file delle regole:', error);
     vscode.window.showErrorMessage(`Errore durante la lettura del file delle regole: ${error}`);
